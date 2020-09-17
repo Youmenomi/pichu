@@ -514,9 +514,11 @@ describe('pichu', () => {
   });
 
   it('method: moveset', () => {
+    const emit = jest.spyOn(pichu, 'emit');
     pichu.thunderPunch(Events.Login, ...user1);
     pichu.thunderShock(Events.Login, ...user1);
     pichu.thunderbolt(Events.Login, ...user1);
+    expect(emit).toBeCalledTimes(3);
   });
 
   it('method: types', () => {
