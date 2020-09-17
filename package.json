@@ -1,0 +1,77 @@
+{
+  "name": "pichu",
+  "version": "0.0.0",
+  "description": "Are you looking for a Pichu to emit events for you? Come and catch it!",
+  "keywords": [
+    "typescript",
+    "event",
+    "emitter",
+    "dispatcher",
+    "listener",
+    "async-once",
+    "pokemon",
+    "pichu"
+  ],
+  "main": "dist/cjs/pichu.cjs.js",
+  "module": "dist/esm/pichu.esm.js",
+  "types": "dist/types/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "jest",
+    "ts:check": "tsc --noEmit -p tsconfig.build.json",
+    "build:js": "rollup -c",
+    "build:types": "tsc --emitDeclarationOnly -p tsconfig.build.json",
+    "build": "npm run ts:check && eslint --ext .ts,.js ./src && npm run build:js && npm run build:types",
+    "release": "np",
+    "version": "npm run build"
+  },
+  "lint-staged": {
+    "*.{ts,js}": [
+      "prettier --write",
+      "eslint --fix",
+      "jest --bail --findRelatedTests"
+    ]
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Youmenomi/pichu.git"
+  },
+  "author": "Dean Yao <youmenomi@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Youmenomi/pichu/issues"
+  },
+  "homepage": "https://github.com/Youmenomi/pichu#readme",
+  "devDependencies": {
+    "@babel/plugin-proposal-class-properties": "^7.10.4",
+    "@babel/plugin-proposal-decorators": "^7.10.4",
+    "@babel/preset-env": "^7.10.4",
+    "@babel/preset-typescript": "^7.10.4",
+    "@types/async": "^3.2.3",
+    "@types/jest": "^26.0.3",
+    "@typescript-eslint/eslint-plugin": "^3.9.1",
+    "@typescript-eslint/parser": "^3.9.1",
+    "babel-eslint": "^10.1.0",
+    "babel-jest": "^26.1.0",
+    "eslint": "^7.7.0",
+    "eslint-config-prettier": "^6.11.0",
+    "eslint-plugin-prettier": "^3.1.4",
+    "husky": "^4.2.5",
+    "jest": "^26.1.0",
+    "lint-staged": "^10.2.11",
+    "np": "^6.3.1",
+    "prettier": "^2.0.5",
+    "rollup": "^2.27.0",
+    "rollup-simple-configer": "^0.0.2",
+    "ts-jest": "^26.1.1",
+    "typescript": "^3.9.6"
+  },
+  "dependencies": {}
+}
