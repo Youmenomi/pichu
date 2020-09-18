@@ -1,9 +1,9 @@
 type Listener = (...args: any[]) => any;
 type Listeners = (Listener | undefined)[];
 type Wrappers = { [event: string]: Listener[] };
-type Form<TForm> = { [key in keyof TForm]: Listener };
+type Expose<TForm> = { [key in keyof TForm]: Listener };
 
-export class Pichu<TForm extends Form<TForm> = Form<any>> {
+export class Pichu<TForm extends Expose<TForm> = Expose<any>> {
   protected _directory = new Map<string, Listeners>();
   protected _emittingNames: string[] = [];
   protected _wrappedListeners = new Map<Listener, Wrappers>();
@@ -32,7 +32,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     }
   }
 
-  protected add(event: string, list: any[], listener: Listener) {
+  protected add(event: string, list: Listeners, listener: Listener) {
     if (!list.includes(listener)) {
       if (list.length > this.maxListeners - 1)
         throw new Error(

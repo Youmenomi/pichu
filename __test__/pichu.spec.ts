@@ -3,7 +3,7 @@ import { Pichu } from '../src';
 enum Events {
   Login = 'login',
 }
-type Express = {
+type Form = {
   [Events.Login]: typeof loginFunc;
   data: typeof dataFunc;
 };
@@ -25,7 +25,7 @@ describe('pichu', () => {
     .spyOn(global.console, 'warn')
     .mockImplementation(() => true);
 
-  let pichu: Pichu<Express>;
+  let pichu: Pichu<Form>;
   const fn1 = jest.fn(loginFunc);
   const fn2 = jest.fn(dataFunc);
 
