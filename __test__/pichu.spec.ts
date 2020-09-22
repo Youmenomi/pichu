@@ -10,9 +10,11 @@ type Form = {
 function loginFunc(user: string, password: string) {
   user;
   password;
+  return ['Do not check the return type.'];
 }
 function dataFunc(data: { message: string; length: number }) {
   data;
+  return ['Do not check the return type.'];
 }
 
 const user1 = ['user001', '1234'] as const;
@@ -521,7 +523,7 @@ describe('pichu', () => {
     expect(emit).toBeCalledTimes(3);
   });
 
-  it('method: types', () => {
+  it('types', () => {
     pichu
       .on(Events.Login, fn1)
       .once(Events.Login, fn1)

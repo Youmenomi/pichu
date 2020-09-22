@@ -1,9 +1,12 @@
 type Listener = (...args: any[]) => any;
 type Listeners = (Listener | undefined)[];
 type Wrappers = { [event: string]: Listener[] };
-type Expose<TForm> = { [key in keyof TForm]: Listener };
+type Form<TForm> = { [key in keyof TForm]: Listener };
+type ReturnAny<TForm extends Form<TForm>> = {
+  [key in keyof TForm]: (...args: Parameters<TForm[key]>) => any;
+};
 
-export class Pichu<TForm extends Expose<TForm> = Expose<any>> {
+export class Pichu<TForm extends Form<TForm> = Form<any>> {
   protected _directory = new Map<string, Listeners>();
   protected _emittingNames: string[] = [];
   protected _wrappedListeners = new Map<Listener, Wrappers>();
@@ -84,7 +87,7 @@ export class Pichu<TForm extends Expose<TForm> = Expose<any>> {
     return true;
   }
 
-  on<T extends keyof TForm & string>(event: T, listener: TForm[T]) {
+  on<T extends keyof TForm & string>(event: T, listener: ReturnAny<TForm>[T]) {
     this.internalOn(this.target(event, true), event, listener);
     return this;
   }
@@ -93,9 +96,12 @@ export class Pichu<TForm extends Expose<TForm> = Expose<any>> {
     this.add(event, target, listener);
   }
 
-  once<T extends keyof TForm & string>(event: T, listener: TForm[T]) {
+  once<T extends keyof TForm & string>(
+    event: T,
+    listener: ReturnAny<TForm>[T]
+  ) {
     const target = this.target(event, true);
-    const onceWrapper = (...args: any[]) => {
+    const onceWrapper = (...args: Parameters<TForm[T]>) => {
       this.internalOffOnce(target, event, listener);
       listener(...args);
     };
@@ -106,11 +112,11 @@ export class Pichu<TForm extends Expose<TForm> = Expose<any>> {
 
   async asyncOnce<T extends keyof TForm & string>(
     event: T,
-    listener: TForm[T]
+    listener: ReturnAny<TForm>[T]
   ) {
     return new Promise((resolve) => {
       const target = this.target(event, true);
-      const asyncOnceWrapper = async (...args: any[]) => {
+      const asyncOnceWrapper = async (...args: Parameters<TForm[T]>) => {
         this.internalOffOnce(target, event, listener);
         await listener(...args);
         resolve();
@@ -136,7 +142,7 @@ export class Pichu<TForm extends Expose<TForm> = Expose<any>> {
 
   off<T extends keyof TForm & string>(
     event: T,
-    listener: TForm[T],
+    listener: ReturnAny<TForm>[T],
     andOffAllOnce = false
   ) {
     const target = this.target(event);
@@ -174,7 +180,7 @@ export class Pichu<TForm extends Expose<TForm> = Expose<any>> {
 
   offOnce<T extends keyof TForm & string>(
     event: T,
-    listener: TForm[T],
+    listener: ReturnAny<TForm>[T],
     offAll = false
   ) {
     const target = this.target(event);
@@ -215,7 +221,7 @@ export class Pichu<TForm extends Expose<TForm> = Expose<any>> {
   }
 
   offAll(event: keyof TForm & string, onlyOnce?: boolean): Pichu;
-  offAll(listener: TForm[keyof TForm], onlyOnce?: boolean): Pichu;
+  offAll(listener: ReturnAny<TForm>[keyof TForm], onlyOnce?: boolean): Pichu;
   offAll(eventOrListener: string | Listener, onlyOnce = false) {
     if (typeof eventOrListener === 'string') {
       const event = eventOrListener;
