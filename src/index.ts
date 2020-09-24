@@ -89,7 +89,6 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
 
   on<T extends keyof TForm & string>(event: T, listener: ReturnAny<TForm>[T]) {
     this.internalOn(this.target(event, true), event, listener);
-    return this;
   }
 
   protected internalOn(target: Listeners, event: string, listener: Listener) {
@@ -107,7 +106,6 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     };
     this.toWrappedListeners(listener, event, onceWrapper);
     this.internalOn(target, event, onceWrapper);
-    return this;
   }
 
   async asyncOnce<T extends keyof TForm & string>(
@@ -146,14 +144,13 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     andOffAllOnce = false
   ) {
     const target = this.target(event);
-    if (!target) return this;
+    if (!target) return;
     if (
       this.internalOff(target, event, listener, andOffAllOnce) &&
       !this.isEmitting(event)
     ) {
       this.sortout(target, event);
     }
-    return this;
   }
 
   protected internalOff(
@@ -184,14 +181,13 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     offAll = false
   ) {
     const target = this.target(event);
-    if (!target) return this;
+    if (!target) return;
     if (
       this.internalOffOnce(target, event, listener, offAll) &&
       !this.isEmitting(event)
     ) {
       this.sortout(target, event);
     }
-    return this;
   }
 
   protected internalOffOnce(
@@ -220,13 +216,13 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     }
   }
 
-  offAll(event: keyof TForm & string, onlyOnce?: boolean): Pichu;
-  offAll(listener: ReturnAny<TForm>[keyof TForm], onlyOnce?: boolean): Pichu;
+  offAll(event: keyof TForm & string, onlyOnce?: boolean): void;
+  offAll(listener: ReturnAny<TForm>[keyof TForm], onlyOnce?: boolean): void;
   offAll(eventOrListener: string | Listener, onlyOnce = false) {
     if (typeof eventOrListener === 'string') {
       const event = eventOrListener;
       const target = this.target(event);
-      if (!target) return this;
+      if (!target) return;
       this._wrappedListeners.forEach((_key, listener) => {
         this.internalOffOnce(target, event, listener, true);
       });
@@ -246,7 +242,6 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
         if ((a || b) && !this.isEmitting(event)) this.sortout(target, event);
       });
     }
-    return this;
   }
 
   listenerCount(event: keyof TForm & string) {
@@ -270,7 +265,6 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     this._directory.clear();
     this._wrappedListeners.clear();
     this._emittingNames.length = 0;
-    return this;
   }
 
   dispose() {

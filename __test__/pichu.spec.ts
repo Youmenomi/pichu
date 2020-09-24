@@ -524,14 +524,6 @@ describe('pichu', () => {
   });
 
   it('types', () => {
-    pichu
-      .on(Events.Login, fn1)
-      .once(Events.Login, fn1)
-      .off(Events.Login, fn1)
-      .offOnce(Events.Login, fn1)
-      .offAll(Events.Login)
-      .clear();
-
     //@ts-expect-error
     pichu.emit('data', '');
     //@ts-expect-error
