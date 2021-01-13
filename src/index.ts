@@ -1,3 +1,6 @@
+import autoBind from 'auto-bind';
+import { report } from './helper';
+
 type Listener = (...args: any[]) => any;
 type Listeners = (Listener | undefined)[];
 type Wrappers = { [event: string]: Listener[] };
@@ -18,6 +21,10 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   }
   set maxListeners(value: number) {
     this._max = value;
+  }
+
+  constructor() {
+    autoBind(this);
   }
 
   protected target(event: string, create?: false): Listeners | undefined;
@@ -112,7 +119,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     event: T,
     listener: ReturnAny<TForm>[T]
   ) {
-    return new Promise((resolve) => {
+    return new Promise<void>((resolve) => {
       const target = this.target(event, true);
       const asyncOnceWrapper = async (...args: Parameters<TForm[T]>) => {
         this.internalOffOnce(target, event, listener);
@@ -206,8 +213,9 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
           warpper = list.shift();
         }
       } else {
-        //This is the expected logical design. When wrappers exist, at least one warpper will exist.
-        this.internalOff(target, event, warpper!);
+        /* istanbul ignore next */
+        if (!warpper) throw report();
+        this.internalOff(target, event, warpper);
       }
       if (list.length === 0) this._wrappedListeners.delete(listener);
       return true;
