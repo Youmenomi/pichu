@@ -11,7 +11,6 @@ type ReturnAny<TForm extends Form<TForm>> = {
 
 export class Pichu<TForm extends Form<TForm> = Form<any>> {
   protected _directory = new Map<string, Listeners>();
-  protected _emittingNames: string[] = [];
   protected _wrappedListeners = new Map<Listener, Wrappers>();
 
   static defaultMaxListeners = 10;
@@ -22,6 +21,13 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   set maxListeners(value: number) {
     this._max = value;
   }
+
+  protected _count = 0;
+  get isEmitting() {
+    return this._count !== 0;
+  }
+
+  protected eventGaps = new Map<string, number>();
 
   constructor() {
     autoBind(this);
@@ -52,24 +58,26 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     } else {
       if (process.env.NODE_ENV === 'development')
         console.warn(
-          `[pichu] Invalid operation, because this "${event}" listener has been on.`
+          `[pichu] Invalid operation, there is a duplicate listener.`
         );
     }
   }
 
-  protected sortout(target: Listeners, event: string) {
-    let i = target.indexOf(undefined);
-    while (i >= 0) {
-      target.splice(i, 1);
-      i = target.indexOf(undefined);
-    }
-    if (target.length === 0) {
-      this._directory.delete(event);
-    }
-  }
-
-  protected isEmitting(event: string) {
-    return this._emittingNames.indexOf(event) >= 0;
+  protected sortout() {
+    this.eventGaps.forEach((_gaps, event) => {
+      const target = this.target(event);
+      /* istanbul ignore next */
+      if (!target) throw report();
+      let i = target.indexOf(undefined);
+      while (i >= 0) {
+        target.splice(i, 1);
+        i = target.indexOf(undefined);
+      }
+      this.eventGaps.delete(event);
+      if (target.length === 0) {
+        this._directory.delete(event);
+      }
+    });
   }
 
   emit<T extends keyof TForm & string>(
@@ -78,20 +86,17 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   ) {
     const target = this.target(event);
     if (!target) return false;
-
-    const isFirstShot = !this.isEmitting(event);
-    if (isFirstShot) this._emittingNames.push(event);
-
+    let empty = true;
     target.forEach((listener) => {
-      if (listener) listener(...args);
+      if (listener) {
+        empty = false;
+        this._count++;
+        listener(...args);
+        this._count--;
+      }
     });
-
-    if (isFirstShot) {
-      this.sortout(target, event);
-      this._emittingNames.splice(this._emittingNames.indexOf(event), 1);
-    }
-
-    return true;
+    if (this._count === 0) this.sortout();
+    return !empty;
   }
 
   on<T extends keyof TForm & string>(event: T, listener: ReturnAny<TForm>[T]) {
@@ -154,9 +159,9 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     if (!target) return;
     if (
       this.internalOff(target, event, listener, andOffAllOnce) &&
-      !this.isEmitting(event)
+      !this.isEmitting
     ) {
-      this.sortout(target, event);
+      this.sortout();
     }
   }
 
@@ -170,6 +175,10 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     target.forEach((func, i) => {
       if (listener === func) {
         target[i] = undefined;
+        let gaps = this.eventGaps.get(event);
+        if (gaps) gaps++;
+        else gaps = 1;
+        this.eventGaps.set(event, gaps);
         a = true;
       }
     });
@@ -191,9 +200,9 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     if (!target) return;
     if (
       this.internalOffOnce(target, event, listener, offAll) &&
-      !this.isEmitting(event)
+      !this.isEmitting
     ) {
-      this.sortout(target, event);
+      this.sortout();
     }
   }
 
@@ -239,7 +248,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
           if (listener) this.internalOff(target, event, listener, true);
         });
       }
-      if (!this.isEmitting(event)) this.sortout(target, event);
+      if (!this.isEmitting) this.sortout();
     } else {
       this._directory.forEach((target, event) => {
         const a = this.internalOffOnce(target, event, eventOrListener, true);
@@ -247,7 +256,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
         if (!onlyOnce) {
           b = this.internalOff(target, event, eventOrListener, true);
         }
-        if ((a || b) && !this.isEmitting(event)) this.sortout(target, event);
+        if ((a || b) && !this.isEmitting) this.sortout();
       });
     }
   }
@@ -255,7 +264,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   listenerCount(event: keyof TForm & string) {
     const target = this.target(event);
     if (!target) return 0;
-    if (this.isEmitting(event)) {
+    if (this.isEmitting) {
       let count = 0;
       target.forEach((listener) => {
         if (listener) count++;
@@ -272,7 +281,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     });
     this._directory.clear();
     this._wrappedListeners.clear();
-    this._emittingNames.length = 0;
+    this.eventGaps.clear();
   }
 
   dispose() {
@@ -280,9 +289,9 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     //@ts-expect-error
     this._directory = undefined;
     //@ts-expect-error
-    this._emittingNames = undefined;
-    //@ts-expect-error
     this._wrappedListeners = undefined;
+    //@ts-expect-error
+    this.eventGaps = undefined;
   }
 
   thunderShock<T extends keyof TForm & string>(

@@ -60,6 +60,17 @@ describe('pichu', () => {
       expect(sortout).toBeCalledTimes(1);
       expect((pichu as any)._directory.size).toBe(1);
     });
+    it('should return false, when the listener array is empty', () => {
+      pichu.on(Events.Login, function func(user: string, password: string) {
+        user;
+        password;
+        pichu.off(Events.Login, func);
+        expect(pichu.emit(Events.Login, ...user1)).toBeFalsy();
+      });
+      expect(pichu.emit(Events.Login, ...user1)).toBeTruthy();
+      expect(sortout).toBeCalledTimes(1);
+      expect((pichu as any)._directory.size).toBe(0);
+    });
   });
 
   describe('method: on', () => {
