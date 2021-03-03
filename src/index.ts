@@ -1,16 +1,16 @@
 import autoBind from 'auto-bind';
-import { report } from './helper';
+import { IndexType, report } from './helper';
 
 type Listener = (...args: any[]) => any;
 type Listeners = (Listener | undefined)[];
-type Wrappers = { [event: string]: Listener[] };
+type Wrappers = Map<IndexType, Listener[]>;
 type Form<TForm> = { [key in keyof TForm]: Listener };
 type ReturnAny<TForm extends Form<TForm>> = {
   [key in keyof TForm]: (...args: Parameters<TForm[key]>) => any;
 };
 
 export class Pichu<TForm extends Form<TForm> = Form<any>> {
-  protected _directory = new Map<string, Listeners>();
+  protected _directory = new Map<IndexType, Listeners>();
   protected _wrappedListeners = new Map<Listener, Wrappers>();
 
   static defaultMaxListeners = 10;
@@ -27,15 +27,15 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     return this._count !== 0;
   }
 
-  protected eventGaps = new Map<string, number>();
+  protected eventGaps = new Map<IndexType, number>();
 
   constructor() {
     autoBind(this);
   }
 
-  protected target(event: string, create?: false): Listeners | undefined;
-  protected target(event: string, create: true): Listeners;
-  protected target(event: string, create = false) {
+  protected target(event: IndexType, create?: false): Listeners | undefined;
+  protected target(event: IndexType, create: true): Listeners;
+  protected target(event: IndexType, create = false) {
     let target = this._directory.get(event);
     if (target) {
       return target;
@@ -80,10 +80,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     });
   }
 
-  emit<T extends keyof TForm & string>(
-    event: T,
-    ...args: Parameters<TForm[T]>
-  ) {
+  emit<T extends keyof TForm>(event: T, ...args: Parameters<TForm[T]>) {
     const target = this.target(event);
     if (!target) return false;
     let empty = true;
@@ -143,10 +140,11 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   ) {
     const wrappers = this._wrappedListeners.get(listener);
     if (wrappers) {
-      const list = wrappers[event];
+      const list = wrappers.get(event);
       if (list) list.push(wrapper);
+      else wrappers.set(event, [wrapper]);
     } else {
-      this._wrappedListeners.set(listener, { [event]: [wrapper] });
+      this._wrappedListeners.set(listener, new Map([[event, [wrapper]]]));
     }
   }
 
@@ -167,7 +165,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
 
   protected internalOff(
     target: Listeners,
-    event: string,
+    event: IndexType,
     listener: Listener,
     andOffAllOnce = false
   ) {
@@ -208,13 +206,15 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
 
   protected internalOffOnce(
     target: Listeners,
-    event: string,
+    event: IndexType,
     listener: Listener,
     offAll = false
   ) {
     const wrappers = this._wrappedListeners.get(listener);
     if (wrappers) {
-      const list = wrappers[event];
+      const list = wrappers.get(event);
+      /* istanbul ignore next */
+      if (!list) throw report();
       let warpper = list.shift();
       if (offAll) {
         while (warpper) {
@@ -226,7 +226,10 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
         if (!warpper) throw report();
         this.internalOff(target, event, warpper);
       }
-      if (list.length === 0) this._wrappedListeners.delete(listener);
+      if (list.length === 0) {
+        wrappers.delete(event);
+        if (wrappers.size === 0) this._wrappedListeners.delete(listener);
+      }
       return true;
     } else {
       return false;

@@ -265,6 +265,21 @@ describe('pichu', () => {
   });
 
   describe('method: offOnce', () => {
+    it('should be called, when other event of the same listener off', () => {
+      pichu.once('test' as any, fn1);
+      pichu.once(Events.Login, fn1);
+      expect(pichu.listenerCount('test' as any)).toBe(1);
+      expect(pichu.listenerCount(Events.Login)).toBe(1);
+
+      pichu.offOnce('test' as any, fn1);
+      expect(pichu.listenerCount('test' as any)).toBe(0);
+      expect(pichu.listenerCount(Events.Login)).toBe(1);
+
+      pichu.emit(Events.Login, ...user1);
+      expect(fn1).toBeCalledTimes(1);
+      expect(pichu.listenerCount(Events.Login)).toBe(0);
+      expect((pichu as any)._directory.size).toBe(0);
+    });
     it('should not be called, when offOnce all', () => {
       pichu.once(Events.Login, fn1);
       pichu.once(Events.Login, fn1);
