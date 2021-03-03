@@ -148,7 +148,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     }
   }
 
-  off<T extends keyof TForm & string>(
+  off<T extends keyof TForm>(
     event: T,
     listener: ReturnAny<TForm>[T],
     andOffAllOnce = false
@@ -189,7 +189,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     return a || b;
   }
 
-  offOnce<T extends keyof TForm & string>(
+  offOnce<T extends keyof TForm>(
     event: T,
     listener: ReturnAny<TForm>[T],
     offAll = false
@@ -236,10 +236,19 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     }
   }
 
-  offAll(event: keyof TForm & string, onlyOnce?: boolean): void;
+  offAll(event: keyof TForm, onlyOnce?: boolean): void;
   offAll(listener: ReturnAny<TForm>[keyof TForm], onlyOnce?: boolean): void;
-  offAll(eventOrListener: string | Listener, onlyOnce = false) {
-    if (typeof eventOrListener === 'string') {
+  offAll(eventOrListener: keyof TForm | Listener, onlyOnce = false) {
+    if (typeof eventOrListener === 'function') {
+      this._directory.forEach((target, event) => {
+        const a = this.internalOffOnce(target, event, eventOrListener, true);
+        let b = false;
+        if (!onlyOnce) {
+          b = this.internalOff(target, event, eventOrListener, true);
+        }
+        if ((a || b) && !this.isEmitting) this.sortout();
+      });
+    } else {
       const event = eventOrListener;
       const target = this.target(event);
       if (!target) return;
@@ -252,19 +261,10 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
         });
       }
       if (!this.isEmitting) this.sortout();
-    } else {
-      this._directory.forEach((target, event) => {
-        const a = this.internalOffOnce(target, event, eventOrListener, true);
-        let b = false;
-        if (!onlyOnce) {
-          b = this.internalOff(target, event, eventOrListener, true);
-        }
-        if ((a || b) && !this.isEmitting) this.sortout();
-      });
     }
   }
 
-  listenerCount(event: keyof TForm & string) {
+  listenerCount(event: keyof TForm) {
     const target = this.target(event);
     if (!target) return 0;
     if (this.isEmitting) {
@@ -297,22 +297,13 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     this.eventGaps = undefined;
   }
 
-  thunderShock<T extends keyof TForm & string>(
-    event: T,
-    ...args: Parameters<TForm[T]>
-  ) {
+  thunderShock<T extends keyof TForm>(event: T, ...args: Parameters<TForm[T]>) {
     return this.emit(event, ...args);
   }
-  thunderPunch<T extends keyof TForm & string>(
-    event: T,
-    ...args: Parameters<TForm[T]>
-  ) {
+  thunderPunch<T extends keyof TForm>(event: T, ...args: Parameters<TForm[T]>) {
     return this.emit(event, ...args);
   }
-  thunderbolt<T extends keyof TForm & string>(
-    event: T,
-    ...args: Parameters<TForm[T]>
-  ) {
+  thunderbolt<T extends keyof TForm>(event: T, ...args: Parameters<TForm[T]>) {
     return this.emit(event, ...args);
   }
 }
