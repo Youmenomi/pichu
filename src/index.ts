@@ -1,11 +1,11 @@
 import autoBind from 'auto-bind';
 import { IndexType, report } from './helper';
 
-type Listener = (...args: any[]) => any;
+export type Listener = (...args: any[]) => any;
 type Listeners = (Listener | undefined)[];
 type Wrappers = Map<IndexType, Listener[]>;
-type Form<TForm> = { [key in keyof TForm]: Listener };
-type ReturnAny<TForm extends Form<TForm>> = {
+export type Form<TForm> = { [key in keyof TForm]: Listener };
+export type ReturnAny<TForm extends Form<TForm>> = {
   [key in keyof TForm]: (...args: Parameters<TForm[key]>) => any;
 };
 
