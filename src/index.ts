@@ -2,299 +2,242 @@ import autoBind from 'auto-bind';
 import { IndexType, report } from './helper';
 
 export type Listener = (...args: any[]) => any;
-type Listeners = (Listener | undefined)[];
-type Wrappers = Map<IndexType, Listener[]>;
 export type Form<TForm> = { [key in keyof TForm]: Listener };
 export type ReturnAny<TForm extends Form<TForm>> = {
   [key in keyof TForm]: (...args: Parameters<TForm[key]>) => any;
 };
 
+enum ListenMode {
+  on,
+  once,
+  asyncOnce,
+}
+
+export const offMsg = '[pichu] Asynchronous listening is turned off.';
+
+let __debug_listening_count = 0;
+export function __debug_get_listening_count() {
+  return __debug_listening_count;
+}
+export function __debug_clear_listening_count() {
+  return (__debug_listening_count = 0);
+}
+
+class Listen {
+  _listensByEvent?: Set<Listen>;
+  get listensByEvent() {
+    /* istanbul ignore next */
+    if (!this._listensByEvent) throw report();
+    return this._listensByEvent;
+  }
+  _listensByListener?: Set<Listen>;
+  get listensByListener() {
+    /* istanbul ignore next */
+    if (!this._listensByListener) throw report();
+    return this._listensByListener;
+  }
+  constructor(
+    public event: IndexType,
+    public listener: Listener,
+    public mode: ListenMode,
+    public resolve?: Function,
+    public reject?: Function
+  ) {
+    __debug_listening_count++;
+  }
+  deploy(_listensByEvent: Set<Listen>, listensByListener: Set<Listen>) {
+    this._listensByEvent = _listensByEvent;
+    this._listensByEvent.add(this);
+    this._listensByListener = listensByListener;
+    this._listensByListener.add(this);
+    return this;
+  }
+  same(event: IndexType, listener: Listener) {
+    return event === this.event && listener === this.listener;
+  }
+  exec(...arg: any[]) {
+    const listener = this.listener;
+    if (this.mode !== ListenMode.on) this.dispose();
+    listener(...arg);
+  }
+  dispose() {
+    this.listensByEvent.delete(this);
+    this._listensByEvent = undefined;
+    this.listensByListener.delete(this);
+    this._listensByListener = undefined;
+    //@ts-expect-error
+    this.listener = undefined;
+
+    this.reject = undefined;
+    this.resolve = undefined;
+
+    __debug_listening_count--;
+  }
+}
+
 export class Pichu<TForm extends Form<TForm> = Form<any>> {
-  protected _directory = new Map<IndexType, Listeners>();
-  protected _wrappedListeners = new Map<Listener, Wrappers>();
-
-  static defaultMaxListeners = 10;
-  protected _max = NaN;
-  get maxListeners() {
-    return isNaN(this._max) ? Pichu.defaultMaxListeners : this._max;
-  }
-  set maxListeners(value: number) {
-    this._max = value;
-  }
-
-  protected _count = 0;
-  get isEmitting() {
-    return this._count !== 0;
-  }
-
-  protected eventGaps = new Map<IndexType, number>();
+  protected _eventMap = new Map<IndexType, Set<Listen>>();
+  protected _listenerMap = new Map<Listener, Set<Listen>>();
 
   constructor() {
     autoBind(this);
   }
 
-  protected target(event: IndexType, create?: false): Listeners | undefined;
-  protected target(event: IndexType, create: true): Listeners;
-  protected target(event: IndexType, create = false) {
-    let target = this._directory.get(event);
-    if (target) {
-      return target;
-    } else if (create) {
-      target = [];
-      this._directory.set(event, target);
-      return target;
-    } else {
-      return undefined;
-    }
-  }
-
-  protected add(event: string, list: Listeners, listener: Listener) {
-    if (!list.includes(listener)) {
-      if (list.length > this.maxListeners - 1)
-        throw new Error(
-          `[pichu] The "${event}" listeners exceed the maximum limit of "${this.maxListeners}".`
-        );
-      else list.push(listener);
-    } else {
-      if (process.env.NODE_ENV === 'development')
+  protected add(
+    event: IndexType,
+    listener: Listener,
+    mode: ListenMode.on | ListenMode.once
+  ): null | Listen;
+  protected add(
+    event: IndexType,
+    listener: Listener,
+    mode: ListenMode.asyncOnce,
+    resolve: Function,
+    reject: Function
+  ): Listen;
+  protected add(
+    event: IndexType,
+    listener: Listener,
+    mode: ListenMode,
+    resolve?: Function,
+    reject?: Function
+  ) {
+    let listensByEvent = this._eventMap.get(event);
+    if (listensByEvent) {
+      if (
+        [...listensByEvent].some((listen) => {
+          return listen.listener === listener;
+        })
+      ) {
         console.warn(
           `[pichu] Invalid operation, there is a duplicate listener.`
         );
+        return null;
+      }
+      let listensByListener = this._listenerMap.get(listener);
+      if (!listensByListener) {
+        listensByListener = new Set<Listen>();
+        this._listenerMap.set(listener, listensByListener);
+      }
+      return new Listen(event, listener, mode, resolve, reject).deploy(
+        listensByEvent,
+        listensByListener
+      );
     }
-  }
-
-  protected sortout() {
-    this.eventGaps.forEach((_gaps, event) => {
-      const target = this.target(event);
-      /* istanbul ignore next */
-      if (!target) throw report();
-      let i = target.indexOf(undefined);
-      while (i >= 0) {
-        target.splice(i, 1);
-        i = target.indexOf(undefined);
-      }
-      this.eventGaps.delete(event);
-      if (target.length === 0) {
-        this._directory.delete(event);
-      }
-    });
+    listensByEvent = new Set();
+    this._eventMap.set(event, listensByEvent);
+    const listensByListener = new Set<Listen>();
+    this._listenerMap.set(listener, listensByListener);
+    return new Listen(event, listener, mode, resolve, reject).deploy(
+      listensByEvent,
+      listensByListener
+    );
   }
 
   emit<T extends keyof TForm>(event: T, ...args: Parameters<TForm[T]>) {
-    const target = this.target(event);
-    if (!target) return false;
-    let empty = true;
-    target.forEach((listener) => {
-      if (listener) {
-        empty = false;
-        this._count++;
-        listener(...args);
-        this._count--;
-      }
+    const listensByEvent = this._eventMap.get(event);
+    if (!listensByEvent || listensByEvent.size === 0) return false;
+    listensByEvent.forEach((listen) => {
+      listen.exec(...args);
     });
-    if (this._count === 0) this.sortout();
-    return !empty;
+    return true;
   }
 
-  on<T extends keyof TForm & string>(event: T, listener: ReturnAny<TForm>[T]) {
-    this.internalOn(this.target(event, true), event, listener);
+  on<T extends keyof TForm>(event: T, listener: ReturnAny<TForm>[T]) {
+    return !!this.add(event, listener, ListenMode.on);
   }
 
-  protected internalOn(target: Listeners, event: string, listener: Listener) {
-    this.add(event, target, listener);
+  once<T extends keyof TForm>(event: T, listener: ReturnAny<TForm>[T]) {
+    return !!this.add(event, listener, ListenMode.once);
   }
 
-  once<T extends keyof TForm & string>(
-    event: T,
-    listener: ReturnAny<TForm>[T]
-  ) {
-    const target = this.target(event, true);
-    const onceWrapper = (...args: Parameters<TForm[T]>) => {
-      this.internalOffOnce(target, event, listener);
-      listener(...args);
-    };
-    this.toWrappedListeners(listener, event, onceWrapper);
-    this.internalOn(target, event, onceWrapper);
-  }
-
-  async asyncOnce<T extends keyof TForm & string>(
-    event: T,
-    listener: ReturnAny<TForm>[T]
-  ) {
-    return new Promise<void>((resolve) => {
-      const target = this.target(event, true);
-      const asyncOnceWrapper = async (...args: Parameters<TForm[T]>) => {
-        this.internalOffOnce(target, event, listener);
-        await listener(...args);
-        resolve();
-      };
-      this.toWrappedListeners(listener, event, asyncOnceWrapper);
-      this.internalOn(target, event, asyncOnceWrapper);
+  asyncOnce<T extends keyof TForm>(event: T) {
+    let listen: Listen;
+    const promise = new Promise((resolve, reject) => {
+      listen = this.add(
+        event,
+        (...args: any) => {
+          resolve(args);
+        },
+        ListenMode.asyncOnce,
+        resolve,
+        reject
+      );
     });
-  }
-
-  protected toWrappedListeners(
-    listener: Listener,
-    event: string,
-    wrapper: Listener
-  ) {
-    const wrappers = this._wrappedListeners.get(listener);
-    if (wrappers) {
-      const list = wrappers.get(event);
-      if (list) list.push(wrapper);
-      else wrappers.set(event, [wrapper]);
-    } else {
-      this._wrappedListeners.set(listener, new Map([[event, [wrapper]]]));
-    }
-  }
-
-  off<T extends keyof TForm>(
-    event: T,
-    listener: ReturnAny<TForm>[T],
-    andOffAllOnce = false
-  ) {
-    const target = this.target(event);
-    if (!target) return;
-    if (
-      this.internalOff(target, event, listener, andOffAllOnce) &&
-      !this.isEmitting
-    ) {
-      this.sortout();
-    }
-  }
-
-  protected internalOff(
-    target: Listeners,
-    event: IndexType,
-    listener: Listener,
-    andOffAllOnce = false
-  ) {
-    let a = false;
-    target.forEach((func, i) => {
-      if (listener === func) {
-        target[i] = undefined;
-        let gaps = this.eventGaps.get(event);
-        if (gaps) gaps++;
-        else gaps = 1;
-        this.eventGaps.set(event, gaps);
-        a = true;
-      }
-    });
-
-    let b = false;
-    if (andOffAllOnce) {
-      b = this.internalOffOnce(target, event, listener, true);
-    }
-
-    return a || b;
-  }
-
-  offOnce<T extends keyof TForm>(
-    event: T,
-    listener: ReturnAny<TForm>[T],
-    offAll = false
-  ) {
-    const target = this.target(event);
-    if (!target) return;
-    if (
-      this.internalOffOnce(target, event, listener, offAll) &&
-      !this.isEmitting
-    ) {
-      this.sortout();
-    }
-  }
-
-  protected internalOffOnce(
-    target: Listeners,
-    event: IndexType,
-    listener: Listener,
-    offAll = false
-  ) {
-    const wrappers = this._wrappedListeners.get(listener);
-    if (wrappers) {
-      const list = wrappers.get(event);
+    (promise as any).off = () => {
+      const reject = listen.reject;
+      listen.dispose();
       /* istanbul ignore next */
-      if (!list) throw report();
-      let warpper = list.shift();
-      if (offAll) {
-        while (warpper) {
-          this.internalOff(target, event, warpper);
-          warpper = list.shift();
-        }
-      } else {
-        /* istanbul ignore next */
-        if (!warpper) throw report();
-        this.internalOff(target, event, warpper);
-      }
-      if (list.length === 0) {
-        wrappers.delete(event);
-        if (wrappers.size === 0) this._wrappedListeners.delete(listener);
-      }
-      return true;
-    } else {
-      return false;
-    }
+      if (!reject) throw report();
+      reject(offMsg);
+    };
+    return promise as Promise<Parameters<TForm[T]>> & { off: () => void };
   }
 
-  offAll(event: keyof TForm, onlyOnce?: boolean): void;
-  offAll(listener: ReturnAny<TForm>[keyof TForm], onlyOnce?: boolean): void;
-  offAll(eventOrListener: keyof TForm | Listener, onlyOnce = false) {
-    if (typeof eventOrListener === 'function') {
-      this._directory.forEach((target, event) => {
-        const a = this.internalOffOnce(target, event, eventOrListener, true);
-        let b = false;
-        if (!onlyOnce) {
-          b = this.internalOff(target, event, eventOrListener, true);
-        }
-        if ((a || b) && !this.isEmitting) this.sortout();
-      });
-    } else {
-      const event = eventOrListener;
-      const target = this.target(event);
-      if (!target) return;
-      this._wrappedListeners.forEach((_key, listener) => {
-        this.internalOffOnce(target, event, listener, true);
-      });
-      if (!onlyOnce) {
-        target.forEach((listener) => {
-          if (listener) this.internalOff(target, event, listener, true);
+  off<T extends keyof TForm>(event: T, listener: ReturnAny<TForm>[T]) {
+    const listensByEvent = this._eventMap.get(event);
+    if (!listensByEvent) return;
+    [...listensByEvent].some((liten) => {
+      if (liten.same(event, listener)) {
+        liten.dispose();
+        return true;
+      } else return false;
+    });
+  }
+
+  offAll(): void;
+  offAll(listener: ReturnAny<TForm>[keyof TForm]): void;
+  offAll(event: keyof TForm): void;
+  offAll(eventOrListener?: keyof TForm | Listener) {
+    if (eventOrListener === undefined) {
+      this._eventMap.forEach((listens) => {
+        listens.forEach((listen) => {
+          listen.dispose();
         });
-      }
-      if (!this.isEmitting) this.sortout();
+      });
+    } else if (typeof eventOrListener === 'function') {
+      const listensByListener = this._listenerMap.get(eventOrListener);
+      if (!listensByListener) return;
+      listensByListener.forEach((listen) => {
+        listen.dispose();
+      });
+    } else {
+      const listensByEvent = this._eventMap.get(eventOrListener);
+      if (!listensByEvent) return;
+      listensByEvent.forEach((listen) => {
+        listen.dispose();
+      });
     }
   }
 
-  listenerCount(event: keyof TForm) {
-    const target = this.target(event);
-    if (!target) return 0;
-    if (this.isEmitting) {
+  listenerCount(): void;
+  listenerCount(listener: ReturnAny<TForm>[keyof TForm]): void;
+  listenerCount(event: keyof TForm): void;
+  listenerCount(eventOrListener?: keyof TForm | Listener) {
+    if (eventOrListener === undefined) {
       let count = 0;
-      target.forEach((listener) => {
-        if (listener) count++;
+      this._eventMap.forEach((listensByEvent) => {
+        count += listensByEvent.size;
       });
       return count;
+    } else if (typeof eventOrListener === 'function') {
+      const listensByListener = this._listenerMap.get(eventOrListener);
+      return listensByListener ? listensByListener.size : 0;
     } else {
-      return target.length;
+      const listensByEvent = this._eventMap.get(eventOrListener);
+      return listensByEvent ? listensByEvent.size : 0;
     }
-  }
-
-  clear() {
-    this._directory.forEach((target) => {
-      target.length = 0;
-    });
-    this._directory.clear();
-    this._wrappedListeners.clear();
-    this.eventGaps.clear();
   }
 
   dispose() {
-    this.clear();
+    this.offAll();
+
+    this._eventMap.clear();
     //@ts-expect-error
-    this._directory = undefined;
+    this._eventMap = undefined;
+    this._listenerMap.clear();
     //@ts-expect-error
-    this._wrappedListeners = undefined;
-    //@ts-expect-error
-    this.eventGaps = undefined;
+    this._listenerMap = undefined;
   }
 
   thunderShock<T extends keyof TForm>(event: T, ...args: Parameters<TForm[T]>) {

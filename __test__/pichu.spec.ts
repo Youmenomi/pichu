@@ -1,4 +1,9 @@
-import { Pichu } from '../src';
+import {
+  Pichu,
+  __debug_get_listening_count,
+  __debug_clear_listening_count,
+  offMsg,
+} from '../src';
 
 enum Events {
   Login = 'login',
@@ -12,13 +17,17 @@ function loginFunc(user: string, password: string) {
   password;
   return ['Do not check the return type.'];
 }
+const user1 = ['user001', '1234'] as const;
+const user2 = ['user002', '5678'] as const;
+
 function dataFunc(data: { message: string; length: number }) {
   data;
   return ['Do not check the return type.'];
 }
-
-const user1 = ['user001', '1234'] as const;
-const user2 = ['user002', '5678'] as const;
+const data1 = {
+  message: 'test',
+  length: 99,
+};
 
 const env = process.env;
 
@@ -31,16 +40,14 @@ describe('pichu', () => {
   const fn1 = jest.fn(loginFunc);
   const fn2 = jest.fn(dataFunc);
 
-  let sortout: jest.SpyInstance;
-
   beforeEach(() => {
     process.env = { ...env };
     warn.mockClear();
     fn1.mockClear();
     fn2.mockClear();
 
+    __debug_clear_listening_count();
     pichu = new Pichu();
-    sortout = jest.spyOn(pichu as any, 'sortout');
   });
 
   afterAll(() => {
@@ -50,93 +57,118 @@ describe('pichu', () => {
   describe('method: emit', () => {
     it('should return false, when no event listening', () => {
       expect(pichu.emit(Events.Login, ...user1)).toBeFalsy();
-      expect(sortout).toBeCalledTimes(0);
-      expect((pichu as any)._directory.size).toBe(0);
+      expect(pichu.listenerCount()).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
     });
-    it('should return true, when has on x 1 & once x 1', () => {
+    it('should return true, when more than one event listener', async () => {
       pichu.once(Events.Login, fn1);
-      pichu.on(Events.Login, fn1);
+      expect(__debug_get_listening_count()).toBe(1);
       expect(pichu.emit(Events.Login, ...user1)).toBeTruthy();
-      expect(sortout).toBeCalledTimes(1);
-      expect((pichu as any)._directory.size).toBe(1);
+      expect(__debug_get_listening_count()).toBe(0);
+
+      pichu.on('data', fn2);
+      expect(pichu.emit('data', data1)).toBeTruthy();
+      expect(__debug_get_listening_count()).toBe(1);
+
+      setTimeout(() => {
+        expect(pichu.emit('data', data1)).toBeTruthy();
+      }, 100);
+      const promise = pichu.asyncOnce('data');
+      expect(__debug_get_listening_count()).toBe(2);
+      expect(await promise).toBeTruthy();
+
+      expect(__debug_get_listening_count()).toBe(1);
     });
-    it('should return false, when the listener array is empty', () => {
+    it('should return false, when the length of the listener array becomes zero', () => {
       pichu.on(Events.Login, function func(user: string, password: string) {
         user;
         password;
         pichu.off(Events.Login, func);
         expect(pichu.emit(Events.Login, ...user1)).toBeFalsy();
       });
+      expect(__debug_get_listening_count()).toBe(1);
       expect(pichu.emit(Events.Login, ...user1)).toBeTruthy();
-      expect(sortout).toBeCalledTimes(1);
-      expect((pichu as any)._directory.size).toBe(0);
+      expect(pichu.listenerCount()).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
     });
   });
 
   describe('method: on', () => {
     it('should warn, when on the same listener', () => {
       process.env.NODE_ENV = 'development';
-      pichu.on(Events.Login, fn1);
+      expect(pichu.on(Events.Login, fn1)).toBe(true);
       expect(console.warn).toBeCalledTimes(0);
-      pichu.on(Events.Login, fn1);
+      expect(pichu.on(Events.Login, fn1)).toBe(false);
       expect(console.warn).toBeCalledTimes(1);
-      expect(sortout).toBeCalledTimes(0);
-      expect((pichu as any)._directory.size).toBe(1);
+      expect(console.warn).nthCalledWith(
+        1,
+        '[pichu] Invalid operation, there is a duplicate listener.'
+      );
+
+      expect(pichu.once(Events.Login, fn1)).toBe(false);
+      expect(console.warn).toBeCalledTimes(2);
+      expect(console.warn).nthCalledWith(
+        2,
+        '[pichu] Invalid operation, there is a duplicate listener.'
+      );
+      expect(pichu.listenerCount()).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
     });
     it('should be called twice, when emit x 2', () => {
       let i = 0;
       pichu.on(Events.Login, fn1);
+      expect(__debug_get_listening_count()).toBe(1);
       pichu.emit(Events.Login, ...user1);
       expect(fn1).nthCalledWith(++i, ...user1);
-      expect(sortout).toBeCalledTimes(1);
       pichu.emit(Events.Login, ...user2);
       expect(fn1).nthCalledWith(++i, ...user2);
       expect(fn1).toBeCalledTimes(2);
       expect(pichu.listenerCount(Events.Login)).toBe(1);
-      expect(sortout).toBeCalledTimes(2);
-      expect((pichu as any)._directory.size).toBe(1);
-    });
-    it('should not be called, when listener off', () => {
-      pichu.on(Events.Login, fn1);
-      pichu.off(Events.Login, fn1);
-      pichu.emit(Events.Login, ...user1);
-      expect(fn1).not.toBeCalled();
-      expect(pichu.listenerCount(Events.Login)).toBe(0);
-      expect(sortout).toBeCalledTimes(1);
-      expect((pichu as any)._directory.size).toBe(0);
+      expect(pichu.listenerCount()).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
     });
   });
 
   describe('method: once', () => {
-    it('Should not be called, when the second event is emitted', () => {
-      let i = 0;
-      pichu.once(Events.Login, fn1);
-      pichu.once(Events.Login, fn1);
-      pichu.once(Events.Login, fn1);
-      pichu.once(Events.Login, fn1);
-      expect(pichu.listenerCount(Events.Login)).toBe(4);
+    it('should warn, when on the same listener', () => {
+      process.env.NODE_ENV = 'development';
+      expect(pichu.once(Events.Login, fn1)).toBe(true);
+      expect(console.warn).toBeCalledTimes(0);
+      expect(pichu.once(Events.Login, fn1)).toBe(false);
+      expect(console.warn).toBeCalledTimes(1);
+      expect(console.warn).nthCalledWith(
+        1,
+        '[pichu] Invalid operation, there is a duplicate listener.'
+      );
 
-      pichu.offOnce(Events.Login, fn1);
-      pichu.offOnce(Events.Login, fn1);
-      expect(pichu.listenerCount(Events.Login)).toBe(2);
+      expect(pichu.on(Events.Login, fn1)).toBe(false);
+      expect(console.warn).toBeCalledTimes(2);
+      expect(console.warn).nthCalledWith(
+        2,
+        '[pichu] Invalid operation, there is a duplicate listener.'
+      );
+      expect(pichu.listenerCount()).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
+    });
+    it('Should be called once, when emit x 2', () => {
+      pichu.once(Events.Login, fn1);
+      pichu.once(Events.Login, fn1);
+      expect(pichu.listenerCount(Events.Login)).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
 
       pichu.emit(Events.Login, ...user1);
-      expect(fn1).nthCalledWith(++i, ...user1);
-      expect(fn1).nthCalledWith(++i, ...user1);
-      expect(fn1).toBeCalledTimes(2);
+      expect(fn1).toBeCalledTimes(1);
       expect(pichu.listenerCount(Events.Login)).toBe(0);
-      expect(sortout).toBeCalledTimes(3);
-      expect((pichu as any)._directory.size).toBe(0);
+      expect(pichu.listenerCount()).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
 
       pichu.emit(Events.Login, ...user1);
-      expect(fn1).toBeCalledTimes(2);
-      expect(sortout).toBeCalledTimes(3);
+      expect(fn1).toBeCalledTimes(1);
     });
   });
 
   describe('method: asyncOnce', () => {
-    it('should receive different arguments, when this case', async () => {
-      let i = 0;
+    it('should wait to receive a new event once, when asynchronous', async () => {
       setTimeout(() => {
         pichu.emit(Events.Login, ...user1);
         pichu.emit(Events.Login, ...user1);
@@ -148,97 +180,68 @@ describe('pichu', () => {
         pichu.emit(Events.Login, ...user2);
       }, 200);
 
-      await pichu.asyncOnce(Events.Login, fn1);
-      expect(fn1).nthCalledWith(++i, ...user1);
-      expect(fn1).toBeCalledTimes(1);
+      expect(await pichu.asyncOnce(Events.Login)).toEqual(user1);
       expect(pichu.listenerCount(Events.Login)).toBe(0);
-      expect(sortout).toBeCalledTimes(1);
-      expect((pichu as any)._directory.size).toBe(0);
+      expect(pichu.listenerCount()).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
 
-      await pichu.asyncOnce(Events.Login, fn1);
-      expect(fn1).nthCalledWith(++i, ...user2);
-      expect(fn1).toBeCalledTimes(2);
+      expect(await pichu.asyncOnce(Events.Login)).toEqual(user2);
       expect(pichu.listenerCount(Events.Login)).toBe(0);
-      expect(sortout).toBeCalledTimes(2);
-      expect((pichu as any)._directory.size).toBe(0);
+      expect(pichu.listenerCount()).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
+    });
 
-      pichu.emit(Events.Login, ...user1);
-      expect(fn1).toBeCalledTimes(2);
-      expect(sortout).toBeCalledTimes(2);
+    it('should not be called, when promise off', async () => {
+      setTimeout(() => {
+        pichu.emit(Events.Login, ...user1);
+      }, 100);
+      const promise = pichu.asyncOnce(Events.Login);
+      expect(pichu.listenerCount(Events.Login)).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
+      promise.off();
+      try {
+        await promise;
+      } catch (error) {
+        expect(error).toBe(offMsg);
+      }
+      expect(pichu.listenerCount(Events.Login)).toBe(0);
+      expect(pichu.listenerCount()).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
     });
   });
 
   describe('method: off', () => {
-    it('should only off on listener, when andOffAllOnce false', () => {
-      let i = 0;
+    it('should not be called, when listener off', async () => {
       pichu.on(Events.Login, fn1);
-      pichu.on(Events.Login, fn1);
-      pichu.once(Events.Login, fn1);
-      pichu.once(Events.Login, fn1);
-      expect(pichu.listenerCount(Events.Login)).toBe(3);
-
       pichu.off(Events.Login, fn1);
-      expect(pichu.listenerCount(Events.Login)).toBe(2);
-      expect(sortout).toBeCalledTimes(1);
-
-      pichu.emit(Events.Login, ...user1);
-      expect(fn1).nthCalledWith(++i, ...user1);
-      expect(fn1).nthCalledWith(++i, ...user1);
-      expect(fn1).toBeCalledTimes(2);
-      expect(pichu.listenerCount(Events.Login)).toBe(0);
-      expect(sortout).toBeCalledTimes(2);
-      expect((pichu as any)._directory.size).toBe(0);
-    });
-    it('should off all listener, when andOffAllOnce true', () => {
-      pichu.on(Events.Login, fn1);
-      pichu.on(Events.Login, fn1);
-      pichu.once(Events.Login, fn1);
-      pichu.once(Events.Login, fn1);
-      expect(pichu.listenerCount(Events.Login)).toBe(3);
-
-      pichu.off(Events.Login, fn1, true);
-      expect(pichu.listenerCount(Events.Login)).toBe(0);
-      expect(sortout).toBeCalledTimes(1);
-      expect((pichu as any)._directory.size).toBe(0);
-
       pichu.emit(Events.Login, ...user1);
       expect(fn1).not.toBeCalled();
-      expect(sortout).toBeCalledTimes(1);
-    });
-    it('should off all listener, when andOffAllOnce true', () => {
-      pichu.on(Events.Login, fn1);
-      pichu.on(Events.Login, fn1);
-      pichu.once(Events.Login, fn1);
-      pichu.once(Events.Login, fn1);
-      expect(pichu.listenerCount(Events.Login)).toBe(3);
+      expect(__debug_get_listening_count()).toBe(0);
 
-      pichu.off(Events.Login, fn1, true);
-      expect(pichu.listenerCount(Events.Login)).toBe(0);
-      expect(sortout).toBeCalledTimes(1);
-      expect((pichu as any)._directory.size).toBe(0);
-
+      pichu.once(Events.Login, fn1);
+      pichu.off(Events.Login, fn1);
       pichu.emit(Events.Login, ...user1);
       expect(fn1).not.toBeCalled();
-      expect(sortout).toBeCalledTimes(1);
+      expect(__debug_get_listening_count()).toBe(0);
     });
     it("Should call invalid, when off a event name that doesn't exist", () => {
-      const internalOff = jest.spyOn(pichu as any, 'internalOff');
       pichu.on(Events.Login, fn1);
       pichu.off('data', fn2);
-      expect(internalOff).not.toBeCalled();
+      expect(pichu.listenerCount(Events.Login)).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
     });
     it('nest case', () => {
       const f1 = jest.fn(() => true);
       const f2 = jest.fn(() => {
         pichu.off(Events.Login, f6);
         expect(pichu.listenerCount(Events.Login)).toBe(3);
-        expect(sortout).toBeCalledTimes(0);
-        expect((pichu as any)._directory.size).toBe(1);
+        expect(pichu.listenerCount()).toBe(3);
+        expect(__debug_get_listening_count()).toBe(3);
 
         pichu.emit(Events.Login, ...user2);
         expect(pichu.listenerCount(Events.Login)).toBe(0);
-        expect(sortout).toBeCalledTimes(0);
-        expect((pichu as any)._directory.size).toBe(1);
+        expect(pichu.listenerCount()).toBe(0);
+        expect(__debug_get_listening_count()).toBe(0);
       });
       const f3 = jest.fn(() => true);
       const f4 = jest.fn(() => true);
@@ -260,230 +263,96 @@ describe('pichu', () => {
       expect(f5).nthCalledWith(1, ...user2);
       expect(f6).not.toBeCalled();
       expect(pichu.listenerCount(Events.Login)).toBe(0);
-      expect(sortout).toBeCalledTimes(1);
-    });
-  });
-
-  describe('method: offOnce', () => {
-    it('should be called, when other event of the same listener off', () => {
-      pichu.once('test' as any, fn1);
-      pichu.once(Events.Login, fn1);
-      expect(pichu.listenerCount('test' as any)).toBe(1);
-      expect(pichu.listenerCount(Events.Login)).toBe(1);
-
-      pichu.offOnce('test' as any, fn1);
-      expect(pichu.listenerCount('test' as any)).toBe(0);
-      expect(pichu.listenerCount(Events.Login)).toBe(1);
-
-      pichu.emit(Events.Login, ...user1);
-      expect(fn1).toBeCalledTimes(1);
-      expect(pichu.listenerCount(Events.Login)).toBe(0);
-      expect((pichu as any)._directory.size).toBe(0);
-    });
-    it('should not be called, when offOnce all', () => {
-      pichu.once(Events.Login, fn1);
-      pichu.once(Events.Login, fn1);
-      pichu.once(Events.Login, fn1);
-      pichu.once(Events.Login, fn1);
-      expect(pichu.listenerCount(Events.Login)).toBe(4);
-
-      pichu.offOnce(Events.Login, fn1, true);
-      expect(pichu.listenerCount(Events.Login)).toBe(0);
-      expect(sortout).toBeCalledTimes(1);
-      expect((pichu as any)._directory.size).toBe(0);
-
-      pichu.emit(Events.Login, ...user1);
-      expect(fn1).not.toBeCalled();
-      expect(sortout).toBeCalledTimes(1);
-    });
-    it("Should call invalid, when offOnce a event name that doesn't exist", () => {
-      const internalOffOnce = jest.spyOn(pichu as any, 'internalOffOnce');
-      pichu.on(Events.Login, fn1);
-      pichu.offOnce('data', fn2);
-      expect(internalOffOnce).not.toBeCalled();
-    });
-    it('nest case', () => {
-      const f1 = jest.fn(() => true);
-      const f2 = jest.fn(() => {
-        pichu.offOnce(Events.Login, f1);
-        pichu.offOnce(Events.Login, f3);
-        pichu.offOnce(Events.Login, f4);
-        expect(pichu.listenerCount(Events.Login)).toBe(2);
-        expect(sortout).toBeCalledTimes(0);
-        expect((pichu as any)._directory.size).toBe(1);
-
-        pichu.emit(Events.Login, ...user2);
-        expect(pichu.listenerCount(Events.Login)).toBe(1);
-        expect(sortout).toBeCalledTimes(0);
-        expect((pichu as any)._directory.size).toBe(1);
-      });
-      const f3 = jest.fn(() => true);
-      const f4 = jest.fn(() => true);
-      const f5 = jest.fn(() => true);
-      const f6 = jest.fn(() => true);
-
-      pichu.once(Events.Login, f1);
-      pichu.once(Events.Login, f2);
-      pichu.once(Events.Login, f3);
-      pichu.once(Events.Login, f4);
-      pichu.once(Events.Login, f5);
-      pichu.on(Events.Login, f6);
-
-      pichu.emit(Events.Login, ...user1);
-      expect(f1).nthCalledWith(1, ...user1);
-      expect(f2).nthCalledWith(1, ...user1);
-      expect(f3).not.toBeCalled();
-      expect(f4).not.toBeCalled();
-      expect(f5).nthCalledWith(1, ...user2);
-      expect(f6).nthCalledWith(1, ...user2);
-      expect(f6).nthCalledWith(2, ...user1);
-      expect(pichu.listenerCount(Events.Login)).toBe(1);
-      expect(sortout).toBeCalledTimes(1);
+      expect(pichu.listenerCount()).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
     });
   });
 
   describe('method: offAll', () => {
-    describe('by event name', () => {
-      it('should not be called, when offAll onlyOnce=false', () => {
-        pichu.on(Events.Login, fn1);
-        pichu.on(Events.Login, fn1);
-        pichu.once(Events.Login, fn1);
-        pichu.once(Events.Login, fn1);
-        expect(pichu.listenerCount(Events.Login)).toBe(3);
+    it('method: by undefined', () => {
+      pichu.on(Events.Login, fn1);
+      pichu.on(Events.Login, fn1);
+      pichu.once(Events.Login, fn1);
+      pichu.once(Events.Login, fn1);
+      expect(pichu.listenerCount(Events.Login)).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
 
-        pichu.offAll(Events.Login);
-        expect(pichu.listenerCount(Events.Login)).toBe(0);
-        expect(sortout).toBeCalledTimes(1);
+      pichu.offAll();
+      expect(pichu.listenerCount(Events.Login)).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
 
-        pichu.emit(Events.Login, ...user1);
-        expect(fn1).not.toBeCalled();
-        expect(sortout).toBeCalledTimes(1);
-        expect((pichu as any)._directory.size).toBe(0);
-      });
-      it('should only off all once, when offAll onlyOnce=true', () => {
-        let i = 0;
-        pichu.on(Events.Login, fn1);
-        pichu.on(Events.Login, fn1);
-        pichu.once(Events.Login, fn1);
-        pichu.once(Events.Login, fn1);
-        expect(pichu.listenerCount(Events.Login)).toBe(3);
-
-        pichu.offAll(Events.Login, true);
-        expect(pichu.listenerCount(Events.Login)).toBe(1);
-        expect(sortout).toBeCalledTimes(1);
-
-        pichu.emit(Events.Login, ...user1);
-        expect(fn1).nthCalledWith(++i, ...user1);
-        expect(fn1).toBeCalledTimes(1);
-        expect(sortout).toBeCalledTimes(2);
-        expect((pichu as any)._directory.size).toBe(1);
-      });
-      it('nest case', () => {
-        const f1 = jest.fn(() => true);
-        const f2 = jest.fn(() => {
-          pichu.offAll(Events.Login);
-          expect(pichu.listenerCount(Events.Login)).toBe(0);
-          expect(sortout).toBeCalledTimes(0);
-          expect((pichu as any)._directory.size).toBe(1);
-
-          pichu.emit(Events.Login, ...user2);
-          expect(pichu.listenerCount(Events.Login)).toBe(0);
-          expect(sortout).toBeCalledTimes(0);
-          expect((pichu as any)._directory.size).toBe(1);
-        });
-        const f3 = jest.fn(() => true);
-        const f4 = jest.fn(() => true);
-        const f5 = jest.fn(() => true);
-        const f6 = jest.fn(() => true);
-
-        pichu.once(Events.Login, f1);
-        pichu.once(Events.Login, f2);
-        pichu.once(Events.Login, f3);
-        pichu.once(Events.Login, f4);
-        pichu.once(Events.Login, f5);
-        pichu.on(Events.Login, f6);
-
-        pichu.emit(Events.Login, ...user1);
-        expect(f1).nthCalledWith(1, ...user1);
-        expect(f2).nthCalledWith(1, ...user1);
-        expect(f3).not.toBeCalled();
-        expect(f4).not.toBeCalled();
-        expect(f5).not.toBeCalled();
-        expect(f6).not.toBeCalled();
-        expect(pichu.listenerCount(Events.Login)).toBe(0);
-        expect(sortout).toBeCalledTimes(1);
-      });
+      pichu.emit(Events.Login, ...user1);
+      expect(fn1).not.toBeCalled();
+      expect(pichu.listenerCount()).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
     });
-    describe('by listener', () => {
-      it('should not be called, when offAll onlyOnce=false', () => {
-        pichu.on(Events.Login, fn1);
-        pichu.on(Events.Login, fn1);
-        pichu.once(Events.Login, fn1);
-        pichu.once(Events.Login, fn1);
-        expect(pichu.listenerCount(Events.Login)).toBe(3);
+    it('method: by event name', () => {
+      pichu.on(Events.Login, fn1);
+      pichu.on(Events.Login, fn1);
+      pichu.once(Events.Login, fn1);
+      pichu.once(Events.Login, fn1);
+      expect(pichu.listenerCount(Events.Login)).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
 
-        pichu.offAll(fn1);
-        expect(pichu.listenerCount(Events.Login)).toBe(0);
-        expect(sortout).toBeCalledTimes(1);
+      pichu.offAll(Events.Login);
+      expect(pichu.listenerCount(Events.Login)).toBe(0);
+      expect(pichu.listenerCount()).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
 
-        pichu.emit(Events.Login, ...user1);
-        expect(fn1).not.toBeCalled();
-        expect(sortout).toBeCalledTimes(1);
-        expect((pichu as any)._directory.size).toBe(0);
-      });
-      it('should only off all once, when offAll onlyOnce=true', () => {
-        let i = 0;
-        pichu.on(Events.Login, fn1);
-        pichu.on(Events.Login, fn1);
-        pichu.once(Events.Login, fn1);
-        pichu.once(Events.Login, fn1);
-        expect(pichu.listenerCount(Events.Login)).toBe(3);
+      pichu.emit(Events.Login, ...user1);
+      expect(fn1).not.toBeCalled();
+      expect(pichu.listenerCount()).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
+    });
+    it('by listener', () => {
+      pichu.on(Events.Login, fn1);
+      pichu.on(Events.Login, fn1);
+      pichu.once(Events.Login, fn1);
+      pichu.once(Events.Login, fn1);
+      expect(pichu.listenerCount(Events.Login)).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
 
-        pichu.offAll(fn1, true);
-        expect(pichu.listenerCount(Events.Login)).toBe(1);
-        expect(sortout).toBeCalledTimes(1);
+      pichu.offAll(fn1);
+      expect(pichu.listenerCount(Events.Login)).toBe(0);
+      expect(pichu.listenerCount()).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
 
-        pichu.emit(Events.Login, ...user1);
-        expect(fn1).nthCalledWith(++i, ...user1);
-        expect(fn1).toBeCalledTimes(1);
-        expect(sortout).toBeCalledTimes(2);
-        expect((pichu as any)._directory.size).toBe(1);
-      });
+      pichu.emit(Events.Login, ...user1);
+      expect(fn1).not.toBeCalled();
+      expect(pichu.listenerCount()).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
+    });
+    it("Should call invalid, when off a event name that doesn't exist", () => {
+      pichu.on(Events.Login, fn1);
+      pichu.offAll('data');
+      expect(pichu.listenerCount(Events.Login)).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
     });
   });
 
   it('method: listenerCount', () => {
-    pichu.on(Events.Login, fn1);
-    pichu.on(Events.Login, fn1);
-    pichu.once(Events.Login, fn1);
-    pichu.once(Events.Login, fn1);
-    expect(pichu.listenerCount(Events.Login)).toBe(3);
-  });
-
-  it('method: maxListeners', () => {
-    pichu.maxListeners = 1;
-    pichu.on(Events.Login, fn1);
-    expect(pichu.listenerCount(Events.Login)).toBe(1);
-    expect(() => pichu.on(Events.Login, fn1)).not.toThrow(Error);
-    expect(pichu.listenerCount(Events.Login)).toBe(1);
-    expect(() => pichu.once(Events.Login, fn1)).toThrow(Error);
-    expect(pichu.listenerCount(Events.Login)).toBe(1);
-  });
-
-  it('method: clear', () => {
-    pichu.on(Events.Login, fn1);
-    pichu.on(Events.Login, fn1);
-    pichu.once(Events.Login, fn1);
-    pichu.once(Events.Login, fn1);
-    expect(pichu.listenerCount(Events.Login)).toBe(3);
-
-    pichu.clear();
     expect(pichu.listenerCount(Events.Login)).toBe(0);
+    expect(pichu.listenerCount('data')).toBe(0);
+    expect(pichu.listenerCount(fn2)).toBe(0);
+    expect(__debug_get_listening_count()).toBe(0);
 
-    pichu.emit(Events.Login, ...user1);
-    expect(fn1).not.toBeCalled();
-    expect(sortout).toBeCalledTimes(0);
-    expect((pichu as any)._directory.size).toBe(0);
+    pichu.on(Events.Login, fn1);
+    pichu.on(Events.Login, fn1);
+    pichu.once(Events.Login, fn1);
+    pichu.once(Events.Login, fn1);
+    expect(pichu.listenerCount(Events.Login)).toBe(1);
+    expect(pichu.listenerCount(fn1)).toBe(1);
+    expect(__debug_get_listening_count()).toBe(1);
+
+    pichu.on('data', fn2);
+    pichu.on('data', fn2);
+    pichu.once('data', fn2);
+    pichu.once('data', fn2);
+    expect(pichu.listenerCount('data')).toBe(1);
+    expect(pichu.listenerCount(fn2)).toBe(1);
+
+    expect(pichu.listenerCount()).toBe(2);
+    expect(__debug_get_listening_count()).toBe(2);
   });
 
   it('method: dispose', () => {
@@ -491,54 +360,15 @@ describe('pichu', () => {
     pichu.on(Events.Login, fn1);
     pichu.once(Events.Login, fn1);
     pichu.once(Events.Login, fn1);
-    expect(pichu.listenerCount(Events.Login)).toBe(3);
+    expect(pichu.listenerCount(Events.Login)).toBe(1);
+    expect(__debug_get_listening_count()).toBe(1);
 
     pichu.dispose();
+    expect(__debug_get_listening_count()).toBe(0);
+
     expect(() => pichu.listenerCount(Events.Login)).toThrow(Error);
     expect(() => pichu.on(Events.Login, fn1)).toThrow(Error);
     expect(() => pichu.emit(Events.Login, ...user1)).toThrow(Error);
-  });
-
-  describe('method: sortout', () => {
-    it("should not be sorted out, when off a listener that doesn't exist", () => {
-      const f1 = jest.fn(() => true);
-      const f2 = jest.fn(() => true);
-      const f3 = jest.fn(() => true);
-      pichu.once(Events.Login, f1);
-      pichu.on(Events.Login, f2);
-
-      pichu.off(Events.Login, f3);
-      expect(sortout).toBeCalledTimes(0);
-    });
-    it("should not be sorted out, when offOnce a listener that doesn't exist", () => {
-      const f1 = jest.fn(() => true);
-      const f2 = jest.fn(() => true);
-      const f3 = jest.fn(() => true);
-      pichu.once(Events.Login, f1);
-      pichu.on(Events.Login, f2);
-
-      pichu.offOnce(Events.Login, f3);
-      expect(sortout).toBeCalledTimes(0);
-    });
-    it("should not be sorted out, when offAll a event name that doesn't exist", () => {
-      const f1 = jest.fn(() => true);
-      const f2 = jest.fn(() => true);
-      pichu.once(Events.Login, f1);
-      pichu.on(Events.Login, f2);
-
-      pichu.offAll('data');
-      expect(sortout).toBeCalledTimes(0);
-    });
-    it("should not be sorted out, when offAll a listener that doesn't exist", () => {
-      const f1 = jest.fn(() => true);
-      const f2 = jest.fn(() => true);
-      const f3 = jest.fn(() => true);
-      pichu.once(Events.Login, f1);
-      pichu.on(Events.Login, f2);
-
-      pichu.offAll(f3);
-      expect(sortout).toBeCalledTimes(0);
-    });
   });
 
   it('method: moveset', () => {
@@ -565,12 +395,6 @@ describe('pichu', () => {
     //@ts-expect-error
     pichu.once('other', fn1);
     //@ts-expect-error
-    pichu.offOnce(Events.Login, fn2);
-    //@ts-expect-error
-    pichu.offOnce('data', fn1);
-    //@ts-expect-error
-    pichu.offOnce('other', fn1);
-    //@ts-expect-error
     pichu.off(Events.Login, fn2);
     //@ts-expect-error
     pichu.off('data', fn1);
@@ -591,9 +415,9 @@ describe('pichu', () => {
     anotherPichu.once(Events.Login, fn2);
     anotherPichu.once('data', fn1);
     anotherPichu.once('other', fn1);
-    anotherPichu.offOnce(Events.Login, fn2);
-    anotherPichu.offOnce('data', fn1);
-    anotherPichu.offOnce('other', fn1);
+    anotherPichu.off(Events.Login, fn2);
+    anotherPichu.off('data', fn1);
+    anotherPichu.off('other', fn1);
     anotherPichu.off(Events.Login, fn2);
     anotherPichu.off('data', fn1);
     anotherPichu.off('other', fn1);
