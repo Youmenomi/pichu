@@ -1,6 +1,6 @@
 {
   "name": "pichu",
-  "version": "0.1.7",
+  "version": "0.2.0",
   "description": "Are you looking for a Pichu to emit events for you? Come and catch it!",
   "keywords": [
     "typescript",
