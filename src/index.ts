@@ -40,7 +40,7 @@ class Listen {
     public event: IndexType,
     public listener: Listener,
     public mode: ListenMode,
-    public group?: IndexType,
+    public group?: any,
     public resolve?: Function,
     public reject?: Function
   ) {
@@ -68,7 +68,7 @@ class Listen {
     this._listensByListener = undefined;
     //@ts-expect-error
     this.listener = undefined;
-
+    this.group = undefined;
     this.reject = undefined;
     this.resolve = undefined;
 
@@ -88,7 +88,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     event: IndexType,
     listener: Listener,
     mode: ListenMode.on | ListenMode.once,
-    group?: IndexType
+    group?: any
   ): null | Listen;
   protected add(
     event: IndexType,
@@ -102,7 +102,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     event: IndexType,
     listener: Listener,
     mode: ListenMode,
-    group?: IndexType,
+    group?: any,
     resolve?: Function,
     reject?: Function
   ) {
@@ -151,7 +151,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   on<T extends keyof TForm>(
     event: T,
     listener: ReturnAny<TForm>[T],
-    group?: IndexType
+    group?: any
   ) {
     return !!this.add(event, listener, ListenMode.on, group);
   }
@@ -159,7 +159,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   once<T extends keyof TForm>(
     event: T,
     listener: ReturnAny<TForm>[T],
-    group?: IndexType
+    group?: any
   ) {
     return !!this.add(event, listener, ListenMode.once, group);
   }
@@ -224,7 +224,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     }
   }
 
-  offGroup(group: IndexType) {
+  offGroup(group: any) {
     if (group === undefined) return;
     this._eventMap.forEach((listens) => {
       listens.forEach((listen) => {
