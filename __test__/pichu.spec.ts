@@ -336,6 +336,30 @@ describe('pichu', () => {
     });
   });
 
+  it('method: offGroup', () => {
+    const f1 = jest.fn();
+    pichu.on(Events.Login, () => f1(), 'group1');
+    pichu.once(Events.Login, () => f1(), 'group1');
+    pichu.once(Events.Login, () => f1(), 'group3');
+    pichu.on(Events.Login, () => f1(), 'group4');
+    expect(pichu.listenerCount(Events.Login)).toBe(4);
+    expect(__debug_get_listening_count()).toBe(4);
+
+    pichu.offGroup('group1');
+    pichu.emit(Events.Login, ...user1);
+    expect(f1).toBeCalledTimes(2);
+    expect(pichu.listenerCount(Events.Login)).toBe(1);
+    expect(__debug_get_listening_count()).toBe(1);
+
+    f1.mockClear();
+    //@ts-expect-error
+    pichu.offGroup();
+    pichu.emit(Events.Login, ...user1);
+    expect(f1).toBeCalledTimes(1);
+    expect(pichu.listenerCount(Events.Login)).toBe(1);
+    expect(__debug_get_listening_count()).toBe(1);
+  });
+
   it('method: listenerCount', () => {
     expect(pichu.listenerCount(Events.Login)).toBe(0);
     expect(pichu.listenerCount('data')).toBe(0);

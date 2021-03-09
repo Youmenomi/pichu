@@ -40,6 +40,7 @@ class Listen {
     public event: IndexType,
     public listener: Listener,
     public mode: ListenMode,
+    public group?: IndexType,
     public resolve?: Function,
     public reject?: Function
   ) {
@@ -86,12 +87,14 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   protected add(
     event: IndexType,
     listener: Listener,
-    mode: ListenMode.on | ListenMode.once
+    mode: ListenMode.on | ListenMode.once,
+    group?: IndexType
   ): null | Listen;
   protected add(
     event: IndexType,
     listener: Listener,
     mode: ListenMode.asyncOnce,
+    group: undefined,
     resolve: Function,
     reject: Function
   ): Listen;
@@ -99,6 +102,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     event: IndexType,
     listener: Listener,
     mode: ListenMode,
+    group?: IndexType,
     resolve?: Function,
     reject?: Function
   ) {
@@ -120,7 +124,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
         listensByListener = new Set<Listen>();
         this._listenerMap.set(listener, listensByListener);
       }
-      return new Listen(event, listener, mode, resolve, reject).deploy(
+      return new Listen(event, listener, mode, group, resolve, reject).deploy(
         listensByEvent,
         listensByListener
       );
@@ -129,7 +133,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     this._eventMap.set(event, listensByEvent);
     const listensByListener = new Set<Listen>();
     this._listenerMap.set(listener, listensByListener);
-    return new Listen(event, listener, mode, resolve, reject).deploy(
+    return new Listen(event, listener, mode, group, resolve, reject).deploy(
       listensByEvent,
       listensByListener
     );
@@ -144,12 +148,20 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     return true;
   }
 
-  on<T extends keyof TForm>(event: T, listener: ReturnAny<TForm>[T]) {
-    return !!this.add(event, listener, ListenMode.on);
+  on<T extends keyof TForm>(
+    event: T,
+    listener: ReturnAny<TForm>[T],
+    group?: IndexType
+  ) {
+    return !!this.add(event, listener, ListenMode.on, group);
   }
 
-  once<T extends keyof TForm>(event: T, listener: ReturnAny<TForm>[T]) {
-    return !!this.add(event, listener, ListenMode.once);
+  once<T extends keyof TForm>(
+    event: T,
+    listener: ReturnAny<TForm>[T],
+    group?: IndexType
+  ) {
+    return !!this.add(event, listener, ListenMode.once, group);
   }
 
   asyncOnce<T extends keyof TForm>(event: T) {
@@ -161,6 +173,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
           resolve(args);
         },
         ListenMode.asyncOnce,
+        undefined,
         resolve,
         reject
       );
@@ -209,6 +222,15 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
         listen.dispose();
       });
     }
+  }
+
+  offGroup(group: IndexType) {
+    if (group === undefined) return;
+    this._eventMap.forEach((listens) => {
+      listens.forEach((listen) => {
+        if (group === listen.group) listen.dispose();
+      });
+    });
   }
 
   listenerCount(): void;
