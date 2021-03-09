@@ -95,9 +95,12 @@ describe('pichu', () => {
 
   describe('method: on', () => {
     it('should warn, when on the same listener', () => {
-      process.env.NODE_ENV = 'development';
       expect(pichu.on(Events.Login, fn1)).toBe(true);
       expect(console.warn).toBeCalledTimes(0);
+      expect(pichu.on(Events.Login, fn1)).toBe(false);
+      expect(console.warn).toBeCalledTimes(0);
+
+      process.env.NODE_ENV = 'development';
       expect(pichu.on(Events.Login, fn1)).toBe(false);
       expect(console.warn).toBeCalledTimes(1);
       expect(console.warn).nthCalledWith(
@@ -131,9 +134,12 @@ describe('pichu', () => {
 
   describe('method: once', () => {
     it('should warn, when on the same listener', () => {
-      process.env.NODE_ENV = 'development';
       expect(pichu.once(Events.Login, fn1)).toBe(true);
       expect(console.warn).toBeCalledTimes(0);
+      expect(pichu.once(Events.Login, fn1)).toBe(false);
+      expect(console.warn).toBeCalledTimes(0);
+
+      process.env.NODE_ENV = 'development';
       expect(pichu.once(Events.Login, fn1)).toBe(false);
       expect(console.warn).toBeCalledTimes(1);
       expect(console.warn).nthCalledWith(

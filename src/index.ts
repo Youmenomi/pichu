@@ -109,9 +109,10 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
           return listen.listener === listener;
         })
       ) {
-        console.warn(
-          `[pichu] Invalid operation, there is a duplicate listener.`
-        );
+        if (process.env.NODE_ENV === 'development')
+          console.warn(
+            `[pichu] Invalid operation, there is a duplicate listener.`
+          );
         return null;
       }
       let listensByListener = this._listenerMap.get(listener);
