@@ -336,28 +336,96 @@ describe('pichu', () => {
     });
   });
 
-  it('method: offGroup', () => {
-    const f1 = jest.fn();
-    pichu.on(Events.Login, () => f1(), 'group1');
-    pichu.once(Events.Login, () => f1(), 'group1');
-    pichu.once(Events.Login, () => f1(), 'group3');
-    pichu.on(Events.Login, () => f1(), 'group4');
-    expect(pichu.listenerCount(Events.Login)).toBe(4);
-    expect(__debug_get_listening_count()).toBe(4);
+  describe('method: offGroup', () => {
+    it('method: by undefined', () => {
+      const f1 = jest.fn();
+      pichu.on(Events.Login, () => f1(), 'group1');
+      pichu.once(Events.Login, () => f1(), 'group1');
+      pichu.once(Events.Login, () => f1(), 'group3');
+      pichu.on(Events.Login, () => f1(), 'group4');
+      expect(pichu.listenerCount(Events.Login)).toBe(4);
+      expect(__debug_get_listening_count()).toBe(4);
 
-    pichu.offGroup('group1');
-    pichu.emit(Events.Login, ...user1);
-    expect(f1).toBeCalledTimes(2);
-    expect(pichu.listenerCount(Events.Login)).toBe(1);
-    expect(__debug_get_listening_count()).toBe(1);
+      //@ts-expect-error
+      pichu.offGroup();
+      pichu.emit(Events.Login, ...user1);
+      expect(f1).toBeCalledTimes(4);
+      expect(pichu.listenerCount(Events.Login)).toBe(2);
+      expect(__debug_get_listening_count()).toBe(2);
+    });
+    it('method: by group', () => {
+      const f1 = jest.fn();
+      pichu.on(Events.Login, () => f1(), 'group1');
+      pichu.once(Events.Login, () => f1(), 'group1');
+      pichu.once(Events.Login, () => f1(), 'group3');
+      pichu.on(Events.Login, () => f1(), 'group4');
+      expect(pichu.listenerCount(Events.Login)).toBe(4);
+      expect(__debug_get_listening_count()).toBe(4);
 
-    f1.mockClear();
-    //@ts-expect-error
-    pichu.offGroup();
-    pichu.emit(Events.Login, ...user1);
-    expect(f1).toBeCalledTimes(1);
-    expect(pichu.listenerCount(Events.Login)).toBe(1);
-    expect(__debug_get_listening_count()).toBe(1);
+      pichu.offGroup('group1');
+      expect(pichu.listenerCount(Events.Login)).toBe(2);
+
+      pichu.emit(Events.Login, ...user1);
+      expect(f1).toBeCalledTimes(2);
+
+      expect(pichu.listenerCount(Events.Login)).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
+    });
+    it('method: by group & event', () => {
+      const f1 = jest.fn();
+      const f2 = jest.fn();
+      pichu.on(Events.Login, () => f1(), 'group1');
+      pichu.once(Events.Login, () => f1(), 'group1');
+      pichu.once(Events.Login, () => f1(), 'group2');
+      pichu.once('data', () => f2(), 'group1');
+      pichu.on('data', () => f2(), 'group1');
+
+      //@ts-expect-error
+      pichu.offGroup('group0', 'test');
+      expect(pichu.listenerCount()).toBe(5);
+      expect(__debug_get_listening_count()).toBe(5);
+
+      pichu.offGroup('group1', Events.Login);
+      expect(pichu.listenerCount(Events.Login)).toBe(1);
+      expect(pichu.listenerCount('data')).toBe(2);
+
+      pichu.emit(Events.Login, ...user1);
+      expect(f1).toBeCalledTimes(1);
+      pichu.emit('data', data1);
+      expect(f2).toBeCalledTimes(2);
+
+      expect(pichu.listenerCount()).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
+    });
+    it('method: by group & listener', () => {
+      const pichu = new Pichu();
+      const f1 = jest.fn();
+      const f2 = jest.fn();
+      pichu.on('test1', f1, 'group1');
+      pichu.once('test2', f1, 'group1');
+      pichu.once('test3', f1, 'group2');
+      pichu.once('test4', f2, 'group1');
+      pichu.on('test5', f2, 'group1');
+
+      pichu.offGroup('group0', () => undefined);
+      expect(pichu.listenerCount()).toBe(5);
+      expect(__debug_get_listening_count()).toBe(5);
+
+      pichu.offGroup('group1', f1);
+      expect(pichu.listenerCount(f1)).toBe(1);
+      expect(pichu.listenerCount(f2)).toBe(2);
+
+      pichu.emit('test1', {});
+      pichu.emit('test2', {});
+      pichu.emit('test3', {});
+      pichu.emit('test4', {});
+      pichu.emit('test5', {});
+      expect(f1).toBeCalledTimes(1);
+      expect(f2).toBeCalledTimes(2);
+
+      expect(pichu.listenerCount()).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
+    });
   });
 
   it('method: listenerCount', () => {

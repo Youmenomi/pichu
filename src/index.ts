@@ -24,12 +24,27 @@ export function __debug_clear_listening_count() {
 }
 
 class Listen {
+  _eventMap?: Map<IndexType, Set<Listen>>;
+  get eventMap() {
+    /* istanbul ignore next */
+    if (!this._eventMap) throw report();
+    return this._eventMap;
+  }
+
+  _listenerMap?: Map<Listener, Set<Listen>>;
+  get listenerMap() {
+    /* istanbul ignore next */
+    if (!this._listenerMap) throw report();
+    return this._listenerMap;
+  }
+
   _listensByEvent?: Set<Listen>;
   get listensByEvent() {
     /* istanbul ignore next */
     if (!this._listensByEvent) throw report();
     return this._listensByEvent;
   }
+
   _listensByListener?: Set<Listen>;
   get listensByListener() {
     /* istanbul ignore next */
@@ -46,9 +61,16 @@ class Listen {
   ) {
     __debug_listening_count++;
   }
-  deploy(_listensByEvent: Set<Listen>, listensByListener: Set<Listen>) {
-    this._listensByEvent = _listensByEvent;
+  deploy(
+    eventMap: Map<IndexType, Set<Listen>>,
+    listensByEvent: Set<Listen>,
+    listenerMap: Map<Listener, Set<Listen>>,
+    listensByListener: Set<Listen>
+  ) {
+    this._eventMap = eventMap;
+    this._listensByEvent = listensByEvent;
     this._listensByEvent.add(this);
+    this._listenerMap = listenerMap;
     this._listensByListener = listensByListener;
     this._listensByListener.add(this);
     return this;
@@ -63,8 +85,17 @@ class Listen {
   }
   dispose() {
     this.listensByEvent.delete(this);
-    this._listensByEvent = undefined;
+    if (this.listensByEvent.size === 0) {
+      this.eventMap.delete(this.event);
+    }
     this.listensByListener.delete(this);
+    if (this.listensByListener.size === 0) {
+      this.listenerMap.delete(this.listener);
+    }
+
+    this._eventMap = undefined;
+    this._listensByEvent = undefined;
+    this._listenerMap = undefined;
     this._listensByListener = undefined;
     //@ts-expect-error
     this.listener = undefined;
@@ -119,22 +150,26 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
           );
         return null;
       }
-      let listensByListener = this._listenerMap.get(listener);
-      if (!listensByListener) {
-        listensByListener = new Set<Listen>();
-        this._listenerMap.set(listener, listensByListener);
-      }
+      const listensByListener = new Set<Listen>();
+      this._listenerMap.set(listener, listensByListener);
       return new Listen(event, listener, mode, group, resolve, reject).deploy(
+        this._eventMap,
         listensByEvent,
+        this._listenerMap,
         listensByListener
       );
     }
     listensByEvent = new Set();
     this._eventMap.set(event, listensByEvent);
-    const listensByListener = new Set<Listen>();
-    this._listenerMap.set(listener, listensByListener);
+    let listensByListener = this._listenerMap.get(listener);
+    if (!listensByListener) {
+      listensByListener = new Set<Listen>();
+      this._listenerMap.set(listener, listensByListener);
+    }
     return new Listen(event, listener, mode, group, resolve, reject).deploy(
+      this._eventMap,
       listensByEvent,
+      this._listenerMap,
       listensByListener
     );
   }
@@ -224,13 +259,32 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     }
   }
 
-  offGroup(group: any) {
+  offGroup(group: any): void;
+  offGroup(group: any, listener: ReturnAny<TForm>[keyof TForm]): void;
+  offGroup(group: any, event: keyof TForm): void;
+  offGroup(group: any, eventOrListener?: keyof TForm | Listener) {
     if (group === undefined) return;
-    this._eventMap.forEach((listens) => {
-      listens.forEach((listen) => {
-        if (group === listen.group) listen.dispose();
+    if (eventOrListener === undefined) {
+      this._eventMap.forEach((listens) => {
+        listens.forEach((listen) => {
+          if (group === listen.group) listen.dispose();
+        });
       });
-    });
+    } else if (typeof eventOrListener === 'function') {
+      const listensByListener = this._listenerMap.get(eventOrListener);
+      if (!listensByListener) return;
+      listensByListener.forEach((listen) => {
+        if (group === listen.group && eventOrListener === listen.listener)
+          listen.dispose();
+      });
+    } else {
+      const listensByEvent = this._eventMap.get(eventOrListener);
+      if (!listensByEvent) return;
+      listensByEvent.forEach((listen) => {
+        if (group === listen.group && eventOrListener === listen.event)
+          listen.dispose();
+      });
+    }
   }
 
   listenerCount(): void;
