@@ -56,9 +56,8 @@ describe('pichu', () => {
 
   describe('method: emit', () => {
     it('should return false, when no event listening', () => {
-      expect(pichu.emit(Events.Login, ...user1)).toBeFalsy();
       expect(pichu.listenerCount()).toBe(0);
-      expect(__debug_get_listening_count()).toBe(0);
+      expect(pichu.emit(Events.Login, ...user1)).toBeFalsy();
     });
     it('should return true, when more than one event listener', async () => {
       pichu.once(Events.Login, fn1);
@@ -75,7 +74,7 @@ describe('pichu', () => {
       }, 100);
       const promise = pichu.asyncOnce('data');
       expect(__debug_get_listening_count()).toBe(2);
-      expect(await promise).toBeTruthy();
+      expect(await promise).toEqual([data1]);
 
       expect(__debug_get_listening_count()).toBe(1);
     });
@@ -444,6 +443,33 @@ describe('pichu', () => {
       expect(pichu.listenerCount()).toBe(1);
       expect(__debug_get_listening_count()).toBe(1);
     });
+  });
+
+  it('method: emitGroup', async () => {
+    const pichu = new Pichu();
+    expect(pichu.emitGroup('group1', 'test1', {})).toBeFalsy();
+
+    const f1 = jest.fn();
+    const f2 = jest.fn();
+    pichu.on('test1', f1, 'group1');
+    pichu.on('test1', f2);
+    expect(__debug_get_listening_count()).toBe(2);
+
+    expect(pichu.emitGroup('group1', 'test1', {})).toBeTruthy();
+    expect(f1).toBeCalledTimes(1);
+
+    f1.mockClear();
+    expect(pichu.emit('test1', {})).toBeTruthy();
+    expect(f1).toBeCalledTimes(1);
+    expect(f2).toBeCalledTimes(1);
+
+    setTimeout(() => {
+      expect(pichu.emitGroup('group1', 'data', data1)).toBeTruthy();
+    }, 100);
+    const promise = pichu.asyncOnce('data', 'group1');
+    expect(__debug_get_listening_count()).toBe(3);
+    expect(await promise).toEqual([data1]);
+    expect(__debug_get_listening_count()).toBe(2);
   });
 
   it('method: listenerCount', () => {

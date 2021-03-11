@@ -191,6 +191,24 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     return true;
   }
 
+  emitGroup<T extends keyof TForm>(
+    group: any,
+    event: T,
+    ...args: Parameters<TForm[T]>
+  ) {
+    const listensByEvent = this._eventMap.get(event);
+    if (!listensByEvent || listensByEvent.size === 0) return false;
+
+    let some = false;
+    listensByEvent.forEach((listen) => {
+      if (group === listen.group) {
+        some = true;
+        listen.exec(...args);
+      }
+    });
+    return some;
+  }
+
   on<T extends keyof TForm>(
     event: T,
     listener: ReturnAny<TForm>[T],
