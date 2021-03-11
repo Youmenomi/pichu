@@ -197,7 +197,7 @@ describe('pichu', () => {
       expect(__debug_get_listening_count()).toBe(0);
     });
 
-    it('should not be called, when promise off', async () => {
+    it('should throw an error, when promise off', async () => {
       setTimeout(() => {
         pichu.emit(Events.Login, ...user1);
       }, 100);
@@ -205,6 +205,24 @@ describe('pichu', () => {
       expect(pichu.listenerCount(Events.Login)).toBe(1);
       expect(__debug_get_listening_count()).toBe(1);
       promise.off();
+      try {
+        await promise;
+      } catch (error) {
+        expect(error).toBe(offMsg);
+      }
+      expect(pichu.listenerCount(Events.Login)).toBe(0);
+      expect(pichu.listenerCount()).toBe(0);
+      expect(__debug_get_listening_count()).toBe(0);
+    });
+
+    it('should throw an error, when the group parameter is provided and then call offGroup', async () => {
+      setTimeout(() => {
+        pichu.emit(Events.Login, ...user1);
+      }, 100);
+      const promise = pichu.asyncOnce(Events.Login, 'group1');
+      expect(pichu.listenerCount(Events.Login)).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
+      pichu.offGroup('group1');
       try {
         await promise;
       } catch (error) {

@@ -51,6 +51,9 @@ class Listen {
     if (!this._listensByListener) throw report();
     return this._listensByListener;
   }
+
+  _executed = false;
+
   constructor(
     public event: IndexType,
     public listener: Listener,
@@ -79,6 +82,7 @@ class Listen {
     return event === this.event && listener === this.listener;
   }
   exec(...arg: any[]) {
+    this._executed = true;
     const listener = this.listener;
     if (this.mode !== ListenMode.on) this.dispose();
     listener(...arg);
@@ -91,6 +95,10 @@ class Listen {
     this.listensByListener.delete(this);
     if (this.listensByListener.size === 0) {
       this.listenerMap.delete(this.listener);
+    }
+
+    if (this.reject && !this._executed) {
+      this.reject(offMsg);
     }
 
     this._eventMap = undefined;
@@ -199,7 +207,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     return !!this.add(event, listener, ListenMode.once, group);
   }
 
-  asyncOnce<T extends keyof TForm>(event: T) {
+  asyncOnce<T extends keyof TForm>(event: T, group?: any) {
     let listen: Listen;
     const promise = new Promise((resolve, reject) => {
       listen = this.add(
@@ -208,17 +216,13 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
           resolve(args);
         },
         ListenMode.asyncOnce,
-        undefined,
+        group,
         resolve,
         reject
       );
     });
     (promise as any).off = () => {
-      const reject = listen.reject;
       listen.dispose();
-      /* istanbul ignore next */
-      if (!reject) throw report();
-      reject(offMsg);
     };
     return promise as Promise<Parameters<TForm[T]>> & { off: () => void };
   }
