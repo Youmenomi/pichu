@@ -253,18 +253,36 @@ describe('pichu', () => {
       expect(pichu.listenerCount(Events.Login)).toBe(1);
       expect(__debug_get_listening_count()).toBe(1);
     });
-    it('nest case', () => {
+    it('nest case1', () => {
+      const func = jest.fn((e: any) => e);
+      const pichu = new Pichu();
+      pichu.once('test', (e) => {
+        func(e);
+        pichu.on('test', (e) => {
+          func(e);
+        });
+        pichu.emit('test', 'data2');
+      });
+      pichu.emit('test', 'data1');
+
+      expect(func).nthCalledWith(1, 'data1');
+      expect(func).nthCalledWith(2, 'data2');
+      expect(func).toBeCalledTimes(2);
+      expect(pichu.listenerCount('test')).toBe(1);
+      expect(__debug_get_listening_count()).toBe(1);
+    });
+    it('nest case2', () => {
       const f1 = jest.fn(() => true);
       const f2 = jest.fn(() => {
         pichu.off(Events.Login, f6);
         expect(pichu.listenerCount(Events.Login)).toBe(3);
         expect(pichu.listenerCount()).toBe(3);
-        expect(__debug_get_listening_count()).toBe(3);
+        expect(__debug_get_listening_count()).toBe(4);
 
         pichu.emit(Events.Login, ...user2);
         expect(pichu.listenerCount(Events.Login)).toBe(0);
         expect(pichu.listenerCount()).toBe(0);
-        expect(__debug_get_listening_count()).toBe(0);
+        expect(__debug_get_listening_count()).toBe(1);
       });
       const f3 = jest.fn(() => true);
       const f4 = jest.fn(() => true);
@@ -292,7 +310,7 @@ describe('pichu', () => {
   });
 
   describe('method: offAll', () => {
-    it('method: by undefined', () => {
+    it('by undefined', () => {
       pichu.on(Events.Login, fn1);
       pichu.on(Events.Login, fn1);
       pichu.once(Events.Login, fn1);
@@ -309,7 +327,7 @@ describe('pichu', () => {
       expect(pichu.listenerCount()).toBe(0);
       expect(__debug_get_listening_count()).toBe(0);
     });
-    it('method: by event name', () => {
+    it('by event name', () => {
       pichu.on(Events.Login, fn1);
       pichu.on(Events.Login, fn1);
       pichu.once(Events.Login, fn1);
@@ -354,7 +372,7 @@ describe('pichu', () => {
   });
 
   describe('method: offGroup', () => {
-    it('method: by undefined', () => {
+    it('by undefined', () => {
       const f1 = jest.fn();
       pichu.on(Events.Login, () => f1(), 'group1');
       pichu.once(Events.Login, () => f1(), 'group1');
@@ -363,14 +381,16 @@ describe('pichu', () => {
       expect(pichu.listenerCount(Events.Login)).toBe(4);
       expect(__debug_get_listening_count()).toBe(4);
 
-      //@ts-expect-error
-      pichu.offGroup();
+      expect(() => {
+        //@ts-expect-error
+        pichu.offGroup();
+      }).toThrowError('[pichu] "undefined" is not a valid parameter.');
       pichu.emit(Events.Login, ...user1);
       expect(f1).toBeCalledTimes(4);
       expect(pichu.listenerCount(Events.Login)).toBe(2);
       expect(__debug_get_listening_count()).toBe(2);
     });
-    it('method: by group', () => {
+    it('by group', () => {
       const f1 = jest.fn();
       pichu.on(Events.Login, () => f1(), 'group1');
       pichu.once(Events.Login, () => f1(), 'group1');
@@ -388,7 +408,7 @@ describe('pichu', () => {
       expect(pichu.listenerCount(Events.Login)).toBe(1);
       expect(__debug_get_listening_count()).toBe(1);
     });
-    it('method: by group & event', () => {
+    it('by group & event', () => {
       const f1 = jest.fn();
       const f2 = jest.fn();
       pichu.on(Events.Login, () => f1(), 'group1');
@@ -414,7 +434,7 @@ describe('pichu', () => {
       expect(pichu.listenerCount()).toBe(1);
       expect(__debug_get_listening_count()).toBe(1);
     });
-    it('method: by group & listener', () => {
+    it('by group & listener', () => {
       const pichu = new Pichu();
       const f1 = jest.fn();
       const f2 = jest.fn();
@@ -495,6 +515,36 @@ describe('pichu', () => {
 
     expect(pichu.listenerCount()).toBe(2);
     expect(__debug_get_listening_count()).toBe(2);
+  });
+
+  it('method: countGroup', () => {
+    const pichu = new Pichu();
+    expect(() => {
+      //@ts-expect-error
+      pichu.countGroup();
+    }).toThrowError('[pichu] "undefined" is not a valid parameter.');
+
+    pichu.on(Events.Login, fn1, 'group1');
+    pichu.on(Events.Login, fn1, 'group1');
+    pichu.once(Events.Login, fn1, 'group1');
+    pichu.once(Events.Login, fn1, 'group1');
+    expect(pichu.countGroup('group1')).toBe(1);
+    expect(__debug_get_listening_count()).toBe(1);
+
+    pichu.on('data', fn1, 'group2');
+    pichu.on('data', fn1, 'group2');
+    pichu.once('data2', fn1, 'group2');
+    pichu.once('data2', fn1, 'group2');
+    expect(pichu.countGroup('group2')).toBe(2);
+    expect(pichu.listenerCount()).toBe(3);
+    expect(__debug_get_listening_count()).toBe(3);
+
+    expect(pichu.countGroup('group1', Events.Login)).toBe(1);
+    expect(pichu.countGroup('group1', fn1)).toBe(1);
+    expect(pichu.countGroup('group2', fn1)).toBe(2);
+    expect(pichu.countGroup('group2', 'data')).toBe(1);
+    expect(pichu.countGroup('group2', 'data2')).toBe(1);
+    expect(pichu.countGroup('group2', fn2)).toBe(0);
   });
 
   it('method: dispose', () => {

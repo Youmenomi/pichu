@@ -12,7 +12,7 @@ export default [].concat(
       file: pkg.main,
       format: 'cjs',
     },
-    { external: ['auto-bind'] }
+    { external: ['hydreigon', 'auto-bind'] }
   ),
   build(
     input,
@@ -20,7 +20,7 @@ export default [].concat(
       file: pkg.module,
       format: 'esm',
     },
-    { external: ['auto-bind'] }
+    { external: ['hydreigon', 'auto-bind'] }
   ),
   build(
     input,

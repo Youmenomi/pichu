@@ -1,5 +1,6 @@
 import autoBind from 'auto-bind';
-import { IndexType, report } from './helper';
+import { Hydreigon } from 'hydreigon';
+import { IndexType } from './helper';
 
 export type Listener = (...args: any[]) => any;
 export type Form<TForm> = { [key in keyof TForm]: Listener };
@@ -7,10 +8,16 @@ export type ReturnAny<TForm extends Form<TForm>> = {
   [key in keyof TForm]: (...args: Parameters<TForm[key]>) => any;
 };
 
-enum ListenMode {
+enum Mode {
   on,
   once,
   asyncOnce,
+}
+
+enum Search {
+  event = 'event',
+  listener = 'listener',
+  group = 'group',
 }
 
 export const offMsg = '[pichu] Asynchronous listening is turned off.';
@@ -24,87 +31,35 @@ export function __debug_clear_listening_count() {
 }
 
 class Listen {
-  _eventMap?: Map<IndexType, Set<Listen>>;
-  get eventMap() {
-    /* istanbul ignore next */
-    if (!this._eventMap) throw report();
-    return this._eventMap;
-  }
-
-  _listenerMap?: Map<Listener, Set<Listen>>;
-  get listenerMap() {
-    /* istanbul ignore next */
-    if (!this._listenerMap) throw report();
-    return this._listenerMap;
-  }
-
-  _listensByEvent?: Set<Listen>;
-  get listensByEvent() {
-    /* istanbul ignore next */
-    if (!this._listensByEvent) throw report();
-    return this._listensByEvent;
-  }
-
-  _listensByListener?: Set<Listen>;
-  get listensByListener() {
-    /* istanbul ignore next */
-    if (!this._listensByListener) throw report();
-    return this._listensByListener;
-  }
-
   _executed = false;
+
+  _isOnce = false;
+  get isOnce() {
+    return this._isOnce;
+  }
 
   constructor(
     public event: IndexType,
     public listener: Listener,
-    public mode: ListenMode,
+    public mode: Mode,
     public group?: any,
     public resolve?: Function,
     public reject?: Function
   ) {
+    this._isOnce = this.mode !== Mode.on;
     __debug_listening_count++;
-  }
-  deploy(
-    eventMap: Map<IndexType, Set<Listen>>,
-    listensByEvent: Set<Listen>,
-    listenerMap: Map<Listener, Set<Listen>>,
-    listensByListener: Set<Listen>
-  ) {
-    this._eventMap = eventMap;
-    this._listensByEvent = listensByEvent;
-    this._listensByEvent.add(this);
-    this._listenerMap = listenerMap;
-    this._listensByListener = listensByListener;
-    this._listensByListener.add(this);
-    return this;
   }
   same(event: IndexType, listener: Listener) {
     return event === this.event && listener === this.listener;
   }
   exec(...arg: any[]) {
     this._executed = true;
-    const listener = this.listener;
-    if (this.mode !== ListenMode.on) this.dispose();
-    listener(...arg);
+    this.listener(...arg);
   }
   dispose() {
-    this.listensByEvent.delete(this);
-    if (this.listensByEvent.size === 0) {
-      this.eventMap.delete(this.event);
-    }
-    this.listensByListener.delete(this);
-    if (this.listensByListener.size === 0) {
-      this.listenerMap.delete(this.listener);
-    }
-
     if (this.reject && !this._executed) {
       this.reject(offMsg);
     }
-
-    this._eventMap = undefined;
-    this._listensByEvent = undefined;
-    this._listenerMap = undefined;
-    this._listensByListener = undefined;
     //@ts-expect-error
     this.listener = undefined;
     this.group = undefined;
@@ -116,8 +71,11 @@ class Listen {
 }
 
 export class Pichu<TForm extends Form<TForm> = Form<any>> {
-  protected _eventMap = new Map<IndexType, Set<Listen>>();
-  protected _listenerMap = new Map<Listener, Set<Listen>>();
+  protected _indexer = new Hydreigon<Listen>(
+    Search.event,
+    Search.listener,
+    Search.group
+  );
 
   constructor() {
     autoBind(this);
@@ -126,13 +84,13 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   protected add(
     event: IndexType,
     listener: Listener,
-    mode: ListenMode.on | ListenMode.once,
+    mode: Mode.on | Mode.once,
     group?: any
   ): null | Listen;
   protected add(
     event: IndexType,
     listener: Listener,
-    mode: ListenMode.asyncOnce,
+    mode: Mode.asyncOnce,
     group: undefined,
     resolve: Function,
     reject: Function
@@ -140,54 +98,41 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   protected add(
     event: IndexType,
     listener: Listener,
-    mode: ListenMode,
+    mode: Mode,
     group?: any,
     resolve?: Function,
     reject?: Function
   ) {
-    let listensByEvent = this._eventMap.get(event);
-    if (listensByEvent) {
-      if (
-        [...listensByEvent].some((listen) => {
-          return listen.listener === listener;
-        })
-      ) {
-        if (process.env.NODE_ENV === 'development')
-          console.warn(
-            `[pichu] Invalid operation, there is a duplicate listener.`
-          );
-        return null;
-      }
-      const listensByListener = new Set<Listen>();
-      this._listenerMap.set(listener, listensByListener);
-      return new Listen(event, listener, mode, group, resolve, reject).deploy(
-        this._eventMap,
-        listensByEvent,
-        this._listenerMap,
-        listensByListener
-      );
+    if (
+      this._indexer.search('event', event, true).some((listen) => {
+        return listen.listener === listener;
+      })
+    ) {
+      if (process.env.NODE_ENV === 'development')
+        console.warn(
+          '[pichu] Invalid operation, there is a duplicate listener.'
+        );
+      return null;
     }
-    listensByEvent = new Set();
-    this._eventMap.set(event, listensByEvent);
-    let listensByListener = this._listenerMap.get(listener);
-    if (!listensByListener) {
-      listensByListener = new Set<Listen>();
-      this._listenerMap.set(listener, listensByListener);
-    }
-    return new Listen(event, listener, mode, group, resolve, reject).deploy(
-      this._eventMap,
-      listensByEvent,
-      this._listenerMap,
-      listensByListener
-    );
+    const listen = new Listen(event, listener, mode, group, resolve, reject);
+    this._indexer.add(listen);
+    return listen;
   }
 
   emit<T extends keyof TForm>(event: T, ...args: Parameters<TForm[T]>) {
-    const listensByEvent = this._eventMap.get(event);
+    const listensByEvent = this._indexer.search(Search.event, event);
     if (!listensByEvent || listensByEvent.size === 0) return false;
+    this._indexer.tie(listensByEvent);
     listensByEvent.forEach((listen) => {
-      listen.exec(...args);
+      if (listen.isOnce) {
+        this._indexer.remove(listen);
+        listen.exec(...args);
+        listen.dispose();
+      } else {
+        listen.exec(...args);
+      }
     });
+    this._indexer.untie(listensByEvent);
     return true;
   }
 
@@ -196,17 +141,22 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     event: T,
     ...args: Parameters<TForm[T]>
   ) {
-    const listensByEvent = this._eventMap.get(event);
-    if (!listensByEvent || listensByEvent.size === 0) return false;
-
-    let some = false;
-    listensByEvent.forEach((listen) => {
-      if (group === listen.group) {
-        some = true;
-        listen.exec(...args);
+    const listensByGroup = this._indexer.search(Search.group, group);
+    if (!listensByGroup || listensByGroup.size === 0) return false;
+    this._indexer.tie(listensByGroup);
+    listensByGroup.forEach((listen) => {
+      if (event === listen.event) {
+        if (listen.isOnce) {
+          this._indexer.remove(listen);
+          listen.exec(...args);
+          listen.dispose();
+        } else {
+          listen.exec(...args);
+        }
       }
     });
-    return some;
+    this._indexer.untie(listensByGroup);
+    return true;
   }
 
   on<T extends keyof TForm>(
@@ -214,7 +164,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     listener: ReturnAny<TForm>[T],
     group?: any
   ) {
-    return !!this.add(event, listener, ListenMode.on, group);
+    return !!this.add(event, listener, Mode.on, group);
   }
 
   once<T extends keyof TForm>(
@@ -222,7 +172,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     listener: ReturnAny<TForm>[T],
     group?: any
   ) {
-    return !!this.add(event, listener, ListenMode.once, group);
+    return !!this.add(event, listener, Mode.once, group);
   }
 
   asyncOnce<T extends keyof TForm>(event: T, group?: any) {
@@ -233,24 +183,24 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
         (...args: any) => {
           resolve(args);
         },
-        ListenMode.asyncOnce,
+        Mode.asyncOnce,
         group,
         resolve,
         reject
       );
     });
     (promise as any).off = () => {
+      this._indexer.remove(listen);
       listen.dispose();
     };
     return promise as Promise<Parameters<TForm[T]>> & { off: () => void };
   }
 
   off<T extends keyof TForm>(event: T, listener: ReturnAny<TForm>[T]) {
-    const listensByEvent = this._eventMap.get(event);
-    if (!listensByEvent) return;
-    [...listensByEvent].some((liten) => {
-      if (liten.same(event, listener)) {
-        liten.dispose();
+    this._indexer.search(Search.event, event, true).some((listen) => {
+      if (listen.same(event, listener)) {
+        this._indexer.remove(listen);
+        listen.dispose();
         return true;
       } else return false;
     });
@@ -261,21 +211,20 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   offAll(event: keyof TForm): void;
   offAll(eventOrListener?: keyof TForm | Listener) {
     if (eventOrListener === undefined) {
-      this._eventMap.forEach((listens) => {
-        listens.forEach((listen) => {
-          listen.dispose();
-        });
-      });
-    } else if (typeof eventOrListener === 'function') {
-      const listensByListener = this._listenerMap.get(eventOrListener);
-      if (!listensByListener) return;
-      listensByListener.forEach((listen) => {
+      this._indexer.items().forEach((listen) => {
+        this._indexer.remove(listen);
         listen.dispose();
       });
+    } else if (typeof eventOrListener === 'function') {
+      this._indexer
+        .search(Search.listener, eventOrListener)
+        .forEach((listen) => {
+          this._indexer.remove(listen);
+          listen.dispose();
+        });
     } else {
-      const listensByEvent = this._eventMap.get(eventOrListener);
-      if (!listensByEvent) return;
-      listensByEvent.forEach((listen) => {
+      this._indexer.search(Search.event, eventOrListener).forEach((listen) => {
+        this._indexer.remove(listen);
         listen.dispose();
       });
     }
@@ -285,26 +234,29 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   offGroup(group: any, listener: ReturnAny<TForm>[keyof TForm]): void;
   offGroup(group: any, event: keyof TForm): void;
   offGroup(group: any, eventOrListener?: keyof TForm | Listener) {
-    if (group === undefined) return;
+    if (group === undefined) {
+      throw new Error(`[pichu] "undefined" is not a valid parameter.`);
+    }
     if (eventOrListener === undefined) {
-      this._eventMap.forEach((listens) => {
-        listens.forEach((listen) => {
-          if (group === listen.group) listen.dispose();
-        });
+      this._indexer.items().forEach((listen) => {
+        if (group === listen.group) {
+          this._indexer.remove(listen);
+          listen.dispose();
+        }
       });
     } else if (typeof eventOrListener === 'function') {
-      const listensByListener = this._listenerMap.get(eventOrListener);
-      if (!listensByListener) return;
-      listensByListener.forEach((listen) => {
-        if (group === listen.group && eventOrListener === listen.listener)
+      this._indexer.search(Search.group, group).forEach((listen) => {
+        if (eventOrListener === listen.listener) {
+          this._indexer.remove(listen);
           listen.dispose();
+        }
       });
     } else {
-      const listensByEvent = this._eventMap.get(eventOrListener);
-      if (!listensByEvent) return;
-      listensByEvent.forEach((listen) => {
-        if (group === listen.group && eventOrListener === listen.event)
+      this._indexer.search(Search.group, group).forEach((listen) => {
+        if (eventOrListener === listen.event) {
+          this._indexer.remove(listen);
           listen.dispose();
+        }
       });
     }
   }
@@ -314,29 +266,44 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   listenerCount(event: keyof TForm): void;
   listenerCount(eventOrListener?: keyof TForm | Listener) {
     if (eventOrListener === undefined) {
+      return this._indexer.itemsSize;
+    } else if (typeof eventOrListener === 'function') {
+      return this._indexer.searchSize(Search.listener, eventOrListener);
+    } else {
+      return this._indexer.searchSize(Search.event, eventOrListener);
+    }
+  }
+
+  countGroup(group: any): void;
+  countGroup(group: any, listener: ReturnAny<TForm>[keyof TForm]): void;
+  countGroup(group: any, event: keyof TForm): void;
+  countGroup(group: any, eventOrListener?: keyof TForm | Listener) {
+    if (group === undefined) {
+      throw new Error(`[pichu] "undefined" is not a valid parameter.`);
+    }
+    if (eventOrListener === undefined) {
+      return this._indexer.searchSize(Search.group, group);
+    } else if (typeof eventOrListener === 'function') {
       let count = 0;
-      this._eventMap.forEach((listensByEvent) => {
-        count += listensByEvent.size;
+      this._indexer.search(Search.group, group).forEach((listen) => {
+        if (eventOrListener === listen.listener) count++;
       });
       return count;
-    } else if (typeof eventOrListener === 'function') {
-      const listensByListener = this._listenerMap.get(eventOrListener);
-      return listensByListener ? listensByListener.size : 0;
     } else {
-      const listensByEvent = this._eventMap.get(eventOrListener);
-      return listensByEvent ? listensByEvent.size : 0;
+      let count = 0;
+      this._indexer.search(Search.group, group).forEach((listen) => {
+        if (eventOrListener === listen.event) count++;
+      });
+      return count;
     }
   }
 
   dispose() {
     this.offAll();
 
-    this._eventMap.clear();
+    this._indexer.dispose();
     //@ts-expect-error
-    this._eventMap = undefined;
-    this._listenerMap.clear();
-    //@ts-expect-error
-    this._listenerMap = undefined;
+    this._indexer = undefined;
   }
 
   thunderShock<T extends keyof TForm>(event: T, ...args: Parameters<TForm[T]>) {
