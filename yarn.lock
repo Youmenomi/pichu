@@ -2717,9 +2717,9 @@ ecc-jsbn@~0.1.1:
     safer-buffer "^2.1.0"
 
 electron-to-chromium@^1.3.649:
-  version "1.3.689"
-  resolved "https://registry.yarnpkg.com/electron-to-chromium/-/electron-to-chromium-1.3.689.tgz#0f4082467c109844b79a7b32a2649c9ab6a6c822"
-  integrity sha512-WCn+ZaU3V8WttlLNSOGOAlR2XpxibGre7slwGrYBB6oTjYPgP29LNDGG6wLvLTMseLdE+G1vno7PfY7JyDV48g==
+  version "1.3.690"
+  resolved "https://registry.yarnpkg.com/electron-to-chromium/-/electron-to-chromium-1.3.690.tgz#54df63ec42fba6b8e9e05fe4be52caeeedb6e634"
+  integrity sha512-zPbaSv1c8LUKqQ+scNxJKv01RYFkVVF1xli+b+3Ty8ONujHjAMg+t/COmdZqrtnS1gT+g4hbSodHillymt1Lww==
 
 elegant-spinner@^1.0.1:
   version "1.0.1"
@@ -3653,10 +3653,10 @@ husky@5:
   resolved "https://registry.yarnpkg.com/husky/-/husky-5.1.3.tgz#1a0645a4fe3ffc006c4d0d8bd0bcb4c98787cc9d"
   integrity sha512-fbNJ+Gz5wx2LIBtMweJNY1D7Uc8p1XERi5KNRMccwfQA+rXlxWNSdUxswo0gT8XqxywTIw7Ywm/F4v/O35RdMg==
 
-hydreigon@^0.1.1:
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/hydreigon/-/hydreigon-0.1.1.tgz#8b86a7bcde07d5e6bcadbdf37e29885204ca02c9"
-  integrity sha512-TUMVVVvQvk3s4J2DHv/p4LRpQUEg9gMbymLRp2Db1g2ZQFFQ5ykbWhCc8xyEzQp+KrO8oUabaKT1CQtwJMYrYg==
+hydreigon@0.1.5:
+  version "0.1.5"
+  resolved "https://registry.yarnpkg.com/hydreigon/-/hydreigon-0.1.5.tgz#8db7f7e8703c3b4517267c4ff3a8e83a435935f9"
+  integrity sha512-Fe+G+h3EW/jIltavro53/LnYpnf5H+bVpVbv/fWfGhxn7je/5U+vaJ4s2YYH0q2ZIoza0YBFmok8fOCZXXHr2g==
   dependencies:
     auto-bind "^4.0.0"
 
@@ -6317,10 +6317,10 @@ rollup-simple-configer@^0.1.1:
     rollup-plugin-filesize "^9.0.2"
     rollup-plugin-terser "^7.0.2"
 
-rollup@^2.28.1, rollup@^2.41.2:
-  version "2.41.2"
-  resolved "https://registry.yarnpkg.com/rollup/-/rollup-2.41.2.tgz#b7db5cb7c21c2d524e8b26ef39c7e9808a290c7e"
-  integrity sha512-6u8fJJXJx6fmvKrAC9DHYZgONvSkz8S9b/VFBjoQ6dkKdHyPpPbpqiNl2Bao9XBzDHpq672X6sGZ9G1ZBqAHMg==
+rollup@^2.28.1, rollup@^2.41.4:
+  version "2.41.4"
+  resolved "https://registry.yarnpkg.com/rollup/-/rollup-2.41.4.tgz#2a674d64db4322482d440699acb060dc6dd9e65f"
+  integrity sha512-f9IHfMO8p2Y8OdisI7Oj3oKkPuaQ6cgSwYqAi0TDvP3w2p+oX1VejX/w28a1h8WTnrapzfO5d4Uqhww+gL0b0g==
   optionalDependencies:
     fsevents "~2.3.1"
 
@@ -6565,9 +6565,9 @@ socks-proxy-agent@^5.0.0:
     socks "^2.3.3"
 
 socks@^2.3.3:
-  version "2.5.1"
-  resolved "https://registry.yarnpkg.com/socks/-/socks-2.5.1.tgz#7720640b6b5ec9a07d556419203baa3f0596df5f"
-  integrity sha512-oZCsJJxapULAYJaEYBSzMcz8m3jqgGrHaGhkmU/o/PQfFWYWxkAaA0UMGImb6s6tEXfKi959X6VJjMMQ3P6TTQ==
+  version "2.6.0"
+  resolved "https://registry.yarnpkg.com/socks/-/socks-2.6.0.tgz#6b984928461d39871b3666754b9000ecf39dfac2"
+  integrity sha512-mNmr9owlinMplev0Wd7UHFlqI4ofnBnNzFuzrm63PPaHgbkqCFe4T5LzwKmtQ/f2tX0NTpcdVLyD/FHxFBstYw==
   dependencies:
     ip "^1.1.5"
     smart-buffer "^4.1.0"

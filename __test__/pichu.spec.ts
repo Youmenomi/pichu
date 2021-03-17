@@ -571,6 +571,98 @@ describe('pichu', () => {
     expect(emit).toBeCalledTimes(3);
   });
 
+  it('priority', async () => {
+    {
+      const func = jest.fn();
+      const pichu = new Pichu(true);
+      pichu.on('test', () => {
+        func('on');
+      });
+      pichu.once(
+        'test',
+        () => {
+          func('once');
+        },
+        undefined,
+        1
+      );
+      pichu.asyncOnce('test', undefined, 2).then(() => {
+        func('asyncOnce1');
+      });
+      pichu.asyncOnce('test', undefined, 3).then(() => {
+        func('asyncOnce2');
+      });
+      pichu.emit('test', {});
+      await Promise.resolve();
+      expect(func).nthCalledWith(2, 'on');
+      expect(func).nthCalledWith(1, 'once');
+      expect(func).nthCalledWith(4, 'asyncOnce1');
+      expect(func).nthCalledWith(3, 'asyncOnce2');
+      expect(func).toBeCalledTimes(4);
+    }
+    {
+      const func = jest.fn();
+      const pichu = new Pichu(true);
+      pichu.on('test', () => {
+        func('on');
+      });
+      pichu.once(
+        'test',
+        () => {
+          func('once');
+        },
+        undefined,
+        -1
+      );
+      pichu.asyncOnce('test', undefined, -2).then(() => {
+        func('asyncOnce1');
+      });
+      pichu.asyncOnce('test', undefined, -3).then(() => {
+        func('asyncOnce2');
+      });
+      pichu.emit('test', {});
+      await Promise.resolve();
+      expect(func).nthCalledWith(1, 'on');
+      expect(func).nthCalledWith(2, 'once');
+      expect(func).nthCalledWith(3, 'asyncOnce1');
+      expect(func).nthCalledWith(4, 'asyncOnce2');
+      expect(func).toBeCalledTimes(4);
+    }
+    {
+      const func = jest.fn();
+      const pichu = new Pichu(true);
+      pichu.on(
+        'test',
+        () => {
+          func('on');
+        },
+        undefined,
+        -100
+      );
+      pichu.once(
+        'test',
+        () => {
+          func('once');
+        },
+        undefined,
+        20
+      );
+      pichu.asyncOnce('test', undefined, -999).then(() => {
+        func('asyncOnce1');
+      });
+      pichu.asyncOnce('test').then(() => {
+        func('asyncOnce2');
+      });
+      pichu.emit('test', {});
+      await Promise.resolve();
+      expect(func).nthCalledWith(2, 'on');
+      expect(func).nthCalledWith(1, 'once');
+      expect(func).nthCalledWith(4, 'asyncOnce1');
+      expect(func).nthCalledWith(3, 'asyncOnce2');
+      expect(func).toBeCalledTimes(4);
+    }
+  });
+
   it('types', () => {
     //@ts-expect-error
     pichu.emit('data', '');

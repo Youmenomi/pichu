@@ -42,7 +42,8 @@ class Listen {
     public event: IndexType,
     public listener: Listener,
     public mode: Mode,
-    public group?: any,
+    public group: any,
+    public priority: number,
     public resolve?: Function,
     public reject?: Function
   ) {
@@ -71,13 +72,19 @@ class Listen {
 }
 
 export class Pichu<TForm extends Form<TForm> = Form<any>> {
-  protected _indexer = new Hydreigon<Listen>(
+  protected _indexer = new Hydreigon(
     Search.event,
     Search.listener,
     Search.group
-  );
+  ).knock<Listen>();
 
-  constructor() {
+  constructor(priority = false) {
+    if (priority) {
+      this._indexer.sort((a, b) => {
+        return b.priority - a.priority;
+      });
+    }
+
     autoBind(this);
   }
 
@@ -85,13 +92,15 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     event: IndexType,
     listener: Listener,
     mode: Mode.on | Mode.once,
-    group?: any
+    group: any,
+    priority: number
   ): null | Listen;
   protected add(
     event: IndexType,
     listener: Listener,
     mode: Mode.asyncOnce,
     group: undefined,
+    priority: number,
     resolve: Function,
     reject: Function
   ): Listen;
@@ -99,12 +108,13 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     event: IndexType,
     listener: Listener,
     mode: Mode,
-    group?: any,
+    group: any,
+    priority: number,
     resolve?: Function,
     reject?: Function
   ) {
     if (
-      this._indexer.search('event', event, true).some((listen) => {
+      this._indexer.search(Search.event, event, true).some((listen) => {
         return listen.listener === listener;
       })
     ) {
@@ -114,7 +124,15 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
         );
       return null;
     }
-    const listen = new Listen(event, listener, mode, group, resolve, reject);
+    const listen = new Listen(
+      event,
+      listener,
+      mode,
+      group,
+      priority,
+      resolve,
+      reject
+    );
     this._indexer.add(listen);
     return listen;
   }
@@ -162,20 +180,22 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   on<T extends keyof TForm>(
     event: T,
     listener: ReturnAny<TForm>[T],
-    group?: any
+    group?: any,
+    priority = 0
   ) {
-    return !!this.add(event, listener, Mode.on, group);
+    return !!this.add(event, listener, Mode.on, group, priority);
   }
 
   once<T extends keyof TForm>(
     event: T,
     listener: ReturnAny<TForm>[T],
-    group?: any
+    group?: any,
+    priority = 0
   ) {
-    return !!this.add(event, listener, Mode.once, group);
+    return !!this.add(event, listener, Mode.once, group, priority);
   }
 
-  asyncOnce<T extends keyof TForm>(event: T, group?: any) {
+  asyncOnce<T extends keyof TForm>(event: T, group?: any, priority = 0) {
     let listen: Listen;
     const promise = new Promise((resolve, reject) => {
       listen = this.add(
@@ -185,6 +205,7 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
         },
         Mode.asyncOnce,
         group,
+        priority,
         resolve,
         reject
       );
