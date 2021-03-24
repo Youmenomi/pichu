@@ -259,11 +259,9 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
       throw new Error(`[pichu] "undefined" is not a valid parameter.`);
     }
     if (eventOrListener === undefined) {
-      this._indexer.items().forEach((listen) => {
-        if (group === listen.group) {
-          this._indexer.remove(listen);
-          listen.dispose();
-        }
+      this._indexer.search(Search.group, group).forEach((listen) => {
+        this._indexer.remove(listen);
+        listen.dispose();
       });
     } else if (typeof eventOrListener === 'function') {
       this._indexer.search(Search.group, group).forEach((listen) => {
