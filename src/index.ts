@@ -1,4 +1,3 @@
-import autoBind from 'auto-bind';
 import { Hydreigon } from 'hydreigon';
 import { IndexType } from './helper';
 
@@ -19,6 +18,11 @@ enum Search {
   listener = 'listener',
   group = 'group',
 }
+
+type Condition =
+  | [Search.event, IndexType]
+  | [Search.listener, Listener]
+  | [Search.group, any];
 
 export const offMsg = '[pichu] Asynchronous listening is turned off.';
 
@@ -72,20 +76,19 @@ class Listen {
 }
 
 export class Pichu<TForm extends Form<TForm> = Form<any>> {
-  protected _indexer = new Hydreigon(
-    Search.event,
+  protected _indexer = new Hydreigon<Listen, Condition>(
+    { index: Search.event, branch: [Search.listener] },
     Search.listener,
-    Search.group
-  ).knock<Listen>();
+    { index: Search.group, branch: [Search.event, Search.listener] }
+  );
+  protected _dispatcher = new Dispatcher<Listen>();
 
   constructor(priority = false) {
     if (priority) {
-      this._indexer.sort((a, b) => {
+      this._indexer.sort = (a, b) => {
         return b.priority - a.priority;
-      });
+      };
     }
-
-    autoBind(this);
   }
 
   protected add(
@@ -114,9 +117,10 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     reject?: Function
   ) {
     if (
-      this._indexer.search(Search.event, event, true).some((listen) => {
-        return listen.listener === listener;
-      })
+      this._indexer.searchSize(
+        [Search.event, event],
+        [Search.listener, listener]
+      )
     ) {
       if (process.env.NODE_ENV === 'development')
         console.warn(
@@ -137,20 +141,23 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     return listen;
   }
 
+  protected removeListen(listen: Listen) {
+    this._indexer.delete(listen);
+    this._dispatcher.remove(listen);
+  }
+
   emit<T extends keyof TForm>(event: T, ...args: Parameters<TForm[T]>) {
-    const listensByEvent = this._indexer.search(Search.event, event);
+    const listensByEvent = this._indexer.search(false, [Search.event, event]);
     if (!listensByEvent || listensByEvent.size === 0) return false;
-    this._indexer.tie(listensByEvent);
-    listensByEvent.forEach((listen) => {
+    this._dispatcher.forEach(listensByEvent, (listen) => {
       if (listen.isOnce) {
-        this._indexer.remove(listen);
+        this.removeListen(listen);
         listen.exec(...args);
         listen.dispose();
       } else {
         listen.exec(...args);
       }
     });
-    this._indexer.untie(listensByEvent);
     return true;
   }
 
@@ -159,21 +166,21 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     event: T,
     ...args: Parameters<TForm[T]>
   ) {
-    const listensByGroup = this._indexer.search(Search.group, group);
-    if (!listensByGroup || listensByGroup.size === 0) return false;
-    this._indexer.tie(listensByGroup);
-    listensByGroup.forEach((listen) => {
-      if (event === listen.event) {
-        if (listen.isOnce) {
-          this._indexer.remove(listen);
-          listen.exec(...args);
-          listen.dispose();
-        } else {
-          listen.exec(...args);
-        }
+    const listens = this._indexer.search(
+      false,
+      [Search.group, group],
+      [Search.event, event]
+    );
+    if (!listens || listens.size === 0) return false;
+    this._dispatcher.forEach(listens, (listen) => {
+      if (listen.isOnce) {
+        this.removeListen(listen);
+        listen.exec(...args);
+        listen.dispose();
+      } else {
+        listen.exec(...args);
       }
     });
-    this._indexer.untie(listensByGroup);
     return true;
   }
 
@@ -211,16 +218,16 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
       );
     });
     (promise as any).off = () => {
-      this._indexer.remove(listen);
+      this.removeListen(listen);
       listen.dispose();
     };
     return promise as Promise<Parameters<TForm[T]>> & { off: () => void };
   }
 
   off<T extends keyof TForm>(event: T, listener: ReturnAny<TForm>[T]) {
-    this._indexer.search(Search.event, event, true).some((listen) => {
+    this._indexer.search(true, [Search.event, event]).some((listen) => {
       if (listen.same(event, listener)) {
-        this._indexer.remove(listen);
+        this.removeListen(listen);
         listen.dispose();
         return true;
       } else return false;
@@ -233,21 +240,23 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   offAll(eventOrListener?: keyof TForm | Listener) {
     if (eventOrListener === undefined) {
       this._indexer.items().forEach((listen) => {
-        this._indexer.remove(listen);
+        this.removeListen(listen);
         listen.dispose();
       });
     } else if (typeof eventOrListener === 'function') {
       this._indexer
-        .search(Search.listener, eventOrListener)
+        .search(false, [Search.listener, eventOrListener])
         .forEach((listen) => {
-          this._indexer.remove(listen);
+          this.removeListen(listen);
           listen.dispose();
         });
     } else {
-      this._indexer.search(Search.event, eventOrListener).forEach((listen) => {
-        this._indexer.remove(listen);
-        listen.dispose();
-      });
+      this._indexer
+        .search(false, [Search.event, eventOrListener])
+        .forEach((listen) => {
+          this.removeListen(listen);
+          listen.dispose();
+        });
     }
   }
 
@@ -259,24 +268,28 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
       throw new Error(`[pichu] "undefined" is not a valid parameter.`);
     }
     if (eventOrListener === undefined) {
-      this._indexer.search(Search.group, group).forEach((listen) => {
-        this._indexer.remove(listen);
+      this._indexer.search(false, [Search.group, group]).forEach((listen) => {
+        this.removeListen(listen);
         listen.dispose();
       });
     } else if (typeof eventOrListener === 'function') {
-      this._indexer.search(Search.group, group).forEach((listen) => {
-        if (eventOrListener === listen.listener) {
-          this._indexer.remove(listen);
+      this._indexer
+        .search(
+          false,
+          [Search.group, group],
+          [Search.listener, eventOrListener]
+        )
+        .forEach((listen) => {
+          this.removeListen(listen);
           listen.dispose();
-        }
-      });
+        });
     } else {
-      this._indexer.search(Search.group, group).forEach((listen) => {
-        if (eventOrListener === listen.event) {
-          this._indexer.remove(listen);
+      this._indexer
+        .search(false, [Search.group, group], [Search.event, eventOrListener])
+        .forEach((listen) => {
+          this.removeListen(listen);
           listen.dispose();
-        }
-      });
+        });
     }
   }
 
@@ -285,11 +298,11 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   listenerCount(event: keyof TForm): void;
   listenerCount(eventOrListener?: keyof TForm | Listener) {
     if (eventOrListener === undefined) {
-      return this._indexer.itemsSize;
+      return this._indexer.size;
     } else if (typeof eventOrListener === 'function') {
-      return this._indexer.searchSize(Search.listener, eventOrListener);
+      return this._indexer.searchSize([Search.listener, eventOrListener]);
     } else {
-      return this._indexer.searchSize(Search.event, eventOrListener);
+      return this._indexer.searchSize([Search.event, eventOrListener]);
     }
   }
 
@@ -301,19 +314,17 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
       throw new Error(`[pichu] "undefined" is not a valid parameter.`);
     }
     if (eventOrListener === undefined) {
-      return this._indexer.searchSize(Search.group, group);
+      return this._indexer.searchSize([Search.group, group]);
     } else if (typeof eventOrListener === 'function') {
-      let count = 0;
-      this._indexer.search(Search.group, group).forEach((listen) => {
-        if (eventOrListener === listen.listener) count++;
-      });
-      return count;
+      return this._indexer.searchSize(
+        [Search.group, group],
+        [Search.listener, eventOrListener]
+      );
     } else {
-      let count = 0;
-      this._indexer.search(Search.group, group).forEach((listen) => {
-        if (eventOrListener === listen.event) count++;
-      });
-      return count;
+      return this._indexer.searchSize(
+        [Search.group, group],
+        [Search.event, eventOrListener]
+      );
     }
   }
 
@@ -323,6 +334,9 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
     this._indexer.dispose();
     //@ts-expect-error
     this._indexer = undefined;
+    this._dispatcher.dispose();
+    //@ts-expect-error
+    this._dispatcher = undefined;
   }
 
   thunderShock<T extends keyof TForm>(event: T, ...args: Parameters<TForm[T]>) {
@@ -333,5 +347,27 @@ export class Pichu<TForm extends Form<TForm> = Form<any>> {
   }
   thunderbolt<T extends keyof TForm>(event: T, ...args: Parameters<TForm[T]>) {
     return this.emit(event, ...args);
+  }
+}
+
+export class Dispatcher<T = any> {
+  _trips = new Set<Set<T>>();
+  forEach(items: Set<T>, cb: (item: T) => void) {
+    this._trips.add(items);
+    items.forEach((item) => {
+      cb(item);
+    });
+    this._trips.delete(items);
+  }
+  // manage discharge
+  remove(item: T) {
+    this._trips.forEach((items) => {
+      items.delete(item);
+    });
+  }
+  dispose() {
+    this._trips.clear();
+    //@ts-expect-error
+    this._trips = undefined;
   }
 }

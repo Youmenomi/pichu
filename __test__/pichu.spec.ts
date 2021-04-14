@@ -709,10 +709,4 @@ describe('pichu', () => {
     anotherPichu.offAll((n: number) => n);
     anotherPichu.listenerCount('');
   });
-
-  it('bind this', () => {
-    expect(() => {
-      pichu.emit.call(undefined, Events.Login, ...user1);
-    }).not.toThrowError();
-  });
 });
